@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>개인별 결과</title>
+  <link rel="stylesheet" href="/shared/admin-design.css">
+  <style>
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .toolbar .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 150px;
+    }
+    .toolbar .field.search {
+      min-width: 260px;
+      flex: 1 1 260px;
+    }
+    .toolbar label {
+      display: block;
+      font-size: var(--fs-sm);
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .toolbar .select {
+      min-height: 32px;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav class="sidebar" id="sidebar"></nav>
+    <header class="topbar" id="topbar"></header>
+    <main class="main">
+      <div class="content">
+        <div class="page-head">
+          <div>
+            <h1 class="page-title">개인별 결과</h1>
+            <p class="page-desc">응시자 개인의 점수, 합격 여부, 취약 영역을 확인합니다.</p>
+          </div>
+        </div>
+
+        <!-- 필터 툴바 -->
+        <div class="toolbar" id="filter-toolbar" style="display: none;">
+          <!-- 동적 생성 -->
+        </div>
+
+        <!-- 데이터 테이블 -->
+        <div class="panel panel-body--flush" id="results-panel">
+          <div id="results-container">
+            <div class="empty-state">
+              <div class="empty-state__icon">📊</div>
+              <div class="empty-state__text">데이터를 불러오는 중입니다...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 오답 상세 모달 -->
+        <div id="detail-modal-root"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="/shared/config.js"></script>
+  <script src="/shared/auth.js"></script>
+  <script src="/shared/nav.js"></script>
+  <script>
+(async () => {
+  "use strict";
+
+  const PASS_SCORE = 70;
+
+  // Auth 확인
+  const auth = await AUTH.requirePage({ admin: true });
+  if (!auth) return;
+
+  const sb = AUTH.sb;
+
+  // ─────────────────────────────────────────────────────────
+  // 데이터 로드
+  // ─────────────────────────────────────────────────────────
+
+  // 회차 정보
+  const { data: roundsData } = await sb
+    .from('exam_rounds')
+    .select('id,label,active')
+    .order('created_at', { ascending: false });
+  const rounds = roundsData || [];
+  const params = new URLSearchParams(location.search);
+  let activeRoundId = params.get('round');
+  if (!activeRoundId) {
+    const a = rounds.find(r => r.active);
+    activeRoundId = a ? a.id : (rounds[0] && rounds[0].id);
+  }
+  const activeExamType = params.get('examType') === '재시험' ? '재시험' : '본시험';
+
+  // Nav 렌더링
+  renderAdminShell({
+    role: auth.role,
+    current: '/admin/person.html',
+    email: auth.email,
+    rounds: rounds,
+    activeRoundId: activeRoundId,
+    examType: activeExamType,
+    showExamTypeToggle: true,
+    onRoundChange: (id) => { location.href = location.pathname + '?round=' + id + '&examType=' + encodeURIComponent(activeExamType); },
+    onExamTypeChange: (type) => { location.href = location.pathname + '?round=' + activeRoundId + '&examType=' + encodeURIComponent(type); }
+  });
+
+  if (!activeRoundId) {
+    document.getElementById('results-container').innerHTML =
+      '<div class="empty-state"><div class="empty-state__icon">⚠️</div><div class="empty-state__text">현재 진행 중인 회차가 없습니다.</div></div>';
+    return;
+  }
+
+  // 앱 설정 조회 (위험군 기준값)
+  const { data: appSettings } = await sb.from('app_settings').select('key,value');
+
+  // 응시 데이터 조회
+  const { data: allAttempts } = await sb
+    .from('exam_attempts')
+    .select('id,user_email,score,passed,answers,is_retake,submitted_at')
+    .eq('round_id', activeRoundId)
+    .not('submitted_at', 'is', null)
+    .order('submitted_at', { ascending: false });
+
+  // 본시험과 재시험을 이메일 기준으로 분류
+  const attemptsMap = {}; // { email: { is_retake_false: attempt, is_retake_true: attempt } }
+  allAttempts?.forEach(a => {
+    if (!attemptsMap[a.user_email]) {
+      attemptsMap[a.user_email] = {};
+    }
+    const key = a.is_retake ? 'is_retake_true' : 'is_retake_false';
+    if (!attemptsMap[a.user_email][key] || new Date(a.submitted_at) > new Date(attemptsMap[a.user_email][key].submitted_at)) {
+      attemptsMap[a.user_email][key] = a;
+    }
+  });
+
+  // 선택된 시험 구분만 필터링
+  let latestAttempts;
+  if (activeExamType === '재시험') {
+    // 재시험 모드: 본시험 불합격자 중 재시험 응시자
+    latestAttempts = Object.values(attemptsMap)
+      .filter(a => a.is_retake_false && !a.is_retake_false.passed && a.is_retake_true)
+      .map(a => a.is_retake_true);
+  } else {
+    // 본시험 모드: 본시험만
+    latestAttempts = Object.values(attemptsMap)
+      .filter(a => a.is_retake_false)
+      .map(a => a.is_retake_false);
+  }
+
+  if (latestAttempts.length === 0) {
+    document.getElementById('results-container').innerHTML =
+      `<div class="empty-state"><div class="empty-state__icon">📭</div><div class="empty-state__text">${activeExamType === '재시험' ? '재시험 응시 완료자가 없습니다.' : '응시 완료한 응시자가 없습니다.'}</div></div>`;
+    return;
+  }
+
+  // 직원 정보
+  const { data: employees } = await sb.from('employees').select('email,name,team,position');
+  const empMap = {};
+  employees?.forEach(e => { empMap[e.email] = e; });
+
+  // 문항 정보
+  const { data: questions } = await sb.from('questions').select('id,domain,question_text,options,correct_index,option_tags');
+  const qMap = {};
+  questions?.forEach(q => { qMap[q.id] = q; });
+
+  // ─────────────────────────────────────────────────────────
+  // 데이터 계산 함수
+  // ─────────────────────────────────────────────────────────
+
+  // 카테고리별(domain별) 정답률 계산
+  function calcCategoryScores(attempt) {
+    const answers = attempt.answers || {};
+    const categoryStats = {};
+
+    Object.entries(answers).forEach(([qId, ans]) => {
+      const q = qMap[qId];
+      if (!q) return;
+
+      const domain = q.domain || '기타';
+      if (!categoryStats[domain]) {
+        categoryStats[domain] = { correct: 0, total: 0 };
+      }
+      categoryStats[domain].total += 1;
+      if (ans.correct) {
+        categoryStats[domain].correct += 1;
+      }
+    });
+
+    const scores = {};
+    Object.entries(categoryStats).forEach(([domain, stats]) => {
+      scores[domain] = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
+    });
+
+    return scores;
+  }
+
+  // 오답률 계산
+  function calcWrongRate(attempt) {
+    const answers = attempt.answers || {};
+    if (Object.keys(answers).length === 0) return 0;
+    const wrongCount = Object.values(answers).filter(ans => !ans.correct).length;
+    return Math.round((wrongCount / Object.keys(answers).length) * 100);
+  }
+
+  // 위험군 판단 (오답률이 policy_risk_wrong_rate 이상인 경우)
+  async function isRiskGroup(attempt, appSettings) {
+    const wrongRate = calcWrongRate(attempt);
+    const policyValue = appSettings?.find(s => s.key === 'policy_risk_wrong_rate');
+    const threshold = policyValue ? JSON.parse(policyValue.value) : 40; // 기본값 40
+    return wrongRate >= threshold;
+  }
+
+  // 재시험 attempt의 오답들 중 가장 흔한 option_tags 추출
+  function getResidualCause(attempt) {
+    const answers = attempt.answers || {};
+    const tagCounts = {};
+
+    Object.entries(answers).forEach(([qId, ans]) => {
+      if (!ans.correct) {
+        const q = qMap[qId];
+        if (q && q.option_tags) {
+          const tag = q.option_tags[ans.selected];
+          if (tag && tag.trim()) {
+            tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+          }
+        }
+      }
+    });
+
+    if (Object.keys(tagCounts).length === 0) return '—';
+    const topTag = Object.entries(tagCounts).sort((a, b) => b[1] - a[1])[0][0];
+    return topTag || '—';
+  }
+
+  // 가장 약한 카테고리 찾기
+  function getWeakestCategory(categoryScores) {
+    if (!categoryScores || Object.keys(categoryScores).length === 0) return '—';
+    let weakest = null;
+    let minScore = 101;
+    Object.entries(categoryScores).forEach(([cat, score]) => {
+      if (score < minScore) {
+        minScore = score;
+        weakest = cat;
+      }
+    });
+    return weakest || '—';
+  }
+
+  // Tier 0 과락 여부 확인 (tier=0 문항 중 오답이 있으면 tier0Fail=true)
+  function checkTier0Fail(attempt) {
+    const answers = attempt.answers || {};
+    return Object.entries(answers).some(([qId, ans]) => {
+      const q = qMap[qId];
+      return q && q.tier === 0 && !ans.correct;
+    });
+  }
+
+  // 오답 문항들 조회
+  function getWrongAnswers(attempt) {
+    const answers = attempt.answers || {};
+    return Object.entries(answers)
+      .filter(([qId, ans]) => ans.correct === false)
+      .map(([qId, ans]) => {
+        const q = qMap[qId];
+        if (!q) return null;
+
+        const selectedIdx = ans.selected;
+        const correctIdx = q.correct_index;
+        const selectedAnswer = q.options?.[selectedIdx] || 'N/A';
+        const correctAnswer = q.options?.[correctIdx] || 'N/A';
+        const errorType = q.option_tags?.[selectedIdx] || '미분류';
+
+        return {
+          qId: qId,
+          domain: q.domain || '기타',
+          questionText: q.question_text || '',
+          selected: selectedAnswer,
+          correct: correctAnswer,
+          errorType: errorType
+        };
+      })
+      .filter(Boolean);
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // 개인 결과 데이터 객체 생성
+  // ─────────────────────────────────────────────────────────
+
+  const personResults = await Promise.all(
+    latestAttempts.map(async (attempt) => {
+      const emp = empMap[attempt.user_email] || {};
+      const categoryScores = calcCategoryScores(attempt);
+      const tier0Fail = checkTier0Fail(attempt);
+      const weakCategory = getWeakestCategory(categoryScores);
+      const wrongAnswers = getWrongAnswers(attempt);
+      const residualCause = getResidualCause(attempt);
+      const riskReleased = false; // 기본값
+
+      let firstAttemptScore = null;
+      let firstAttemptTier0Fail = false;
+      let wasRiskGroup = false;
+
+      // 재시험 모드: 본시험 점수 정보 추가로 조회
+      if (activeExamType === '재시험') {
+        const firstAttempt = attemptsMap[attempt.user_email].is_retake_false;
+        if (firstAttempt) {
+          firstAttemptScore = Math.round(firstAttempt.score || 0);
+          firstAttemptTier0Fail = checkTier0Fail(firstAttempt);
+          wasRiskGroup = await isRiskGroup(firstAttempt, appSettings);
+          const isCurrentRiskGroup = await isRiskGroup(attempt, appSettings);
+          const riskReleaseValue = wasRiskGroup && !isCurrentRiskGroup ? '해제' : (wasRiskGroup ? '유지' : '해당없음');
+          riskReleased = riskReleaseValue !== '유지'; // 해제되었으면 true
+        }
+      }
+
+      return {
+        id: attempt.id,
+        email: attempt.user_email,
+        name: emp.name || attempt.user_email,
+        team: emp.team || '—',
+        position: emp.position || '—',
+        score: Math.round(attempt.score || 0),
+        passed: attempt.passed,
+        tier0Fail: tier0Fail,
+        weakCategory: weakCategory,
+        isRetake: attempt.is_retake,
+        categoryScores: categoryScores,
+        wrongAnswers: wrongAnswers,
+        // 재시험 모드 추가 필드
+        firstAttemptScore: firstAttemptScore,
+        firstAttemptTier0Fail: firstAttemptTier0Fail,
+        wasRiskGroup: wasRiskGroup,
+        riskReleased: riskReleased,
+        residualCause: residualCause
+      };
+    })
+  );
+
+  // ─────────────────────────────────────────────────────────
+  // 필터 상태 관리
+  // ─────────────────────────────────────────────────────────
+
+  const state = {
+    personalSearch: '',
+    personalFilters: {
+      team: '전체',
+      pass: '전체',
+      tier0: '전체',
+      retake: '전체',
+      category: '전체'
+    }
+  };
+
+  // 팀 목록 추출
+  const teams = ['전체', ...new Set(personResults.map(p => p.team).filter(t => t !== '—'))];
+
+  // 카테고리 목록 추출
+  const categories = ['전체', ...new Set(
+    personResults.flatMap(p => Object.keys(p.categoryScores))
+  )];
+
+  // ─────────────────────────────────────────────────────────
+  // 필터 적용 함수
+  // ─────────────────────────────────────────────────────────
+
+  function matchesSearch(query, values) {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return true;
+    return values.some(value => String(value).toLowerCase().includes(needle));
+  }
+
+  function getFilteredResults() {
+    return personResults.filter(person => {
+      const f = state.personalFilters;
+
+      // 팀 필터
+      if (f.team !== '전체' && person.team !== f.team) return false;
+
+      // 합격 여부 필터
+      if (f.pass !== '전체') {
+        const passText = person.passed ? '합격' : '불합격';
+        if (passText !== f.pass) return false;
+      }
+
+      // Tier 0 과락 필터
+      if (f.tier0 !== '전체') {
+        const tier0Text = person.tier0Fail ? '해당' : '아니오';
+        if (tier0Text !== f.tier0) return false;
+      }
+
+      // 재시험 대상 필터 (불합격 = 재시험 대상)
+      if (f.retake !== '전체') {
+        const retakeText = !person.passed ? '대상' : '대상 아님';
+        if (retakeText !== f.retake) return false;
+      }
+
+      // 취약 카테고리 필터
+      if (f.category !== '전체' && person.weakCategory !== f.category) return false;
+
+      // 검색 필터 (이름, 팀, 직무, 취약 카테고리)
+      if (!matchesSearch(state.personalSearch, [person.name, person.team, person.position, person.weakCategory])) {
+        return false;
+      }
+
+      return true;
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // 렌더링 함수
+  // ─────────────────────────────────────────────────────────
+
+  function badge(text, tone) {
+    const toneMap = {
+      'success': 'badge--success',
+      'danger': 'badge--danger',
+      'warning': 'badge--warning',
+      'info': 'badge--info',
+      'neutral': 'badge--neutral'
+    };
+    return `<span class="badge ${toneMap[tone] || 'badge--neutral'}">${text}</span>`;
+  }
+
+  function renderFilterToolbar() {
+    const isRetakeView = activeExamType === '재시험';
+    return `
+      <div class="toolbar" aria-label="개인별 결과 검색 및 필터">
+        <div class="field search">
+          <label for="personalSearch">검색</label>
+          <input
+            id="personalSearch"
+            class="input"
+            type="search"
+            data-personal-search="true"
+            value="${state.personalSearch}"
+            placeholder="이름, 팀, 직무, 취약 영역 검색"
+          >
+        </div>
+        <div class="field">
+          <label for="personalTeamFilter">팀</label>
+          <select id="personalTeamFilter" class="select" data-personal-filter="team">
+            ${teams.map(t => `<option value="${t}" ${state.personalFilters.team === t ? 'selected' : ''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label for="personalPassFilter">합격 여부</label>
+          <select id="personalPassFilter" class="select" data-personal-filter="pass">
+            <option value="전체" ${state.personalFilters.pass === '전체' ? 'selected' : ''}>전체</option>
+            <option value="합격" ${state.personalFilters.pass === '합격' ? 'selected' : ''}>합격</option>
+            <option value="불합격" ${state.personalFilters.pass === '불합격' ? 'selected' : ''}>불합격</option>
+          </select>
+        </div>
+        ${isRetakeView ? '' : `
+        <div class="field">
+          <label for="personalTier0Filter">Tier 0 과락</label>
+          <select id="personalTier0Filter" class="select" data-personal-filter="tier0">
+            <option value="전체" ${state.personalFilters.tier0 === '전체' ? 'selected' : ''}>전체</option>
+            <option value="해당" ${state.personalFilters.tier0 === '해당' ? 'selected' : ''}>해당</option>
+            <option value="아니오" ${state.personalFilters.tier0 === '아니오' ? 'selected' : ''}>아니오</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="personalRetakeFilter">재시험 대상</label>
+          <select id="personalRetakeFilter" class="select" data-personal-filter="retake">
+            <option value="전체" ${state.personalFilters.retake === '전체' ? 'selected' : ''}>전체</option>
+            <option value="대상" ${state.personalFilters.retake === '대상' ? 'selected' : ''}>대상</option>
+            <option value="대상 아님" ${state.personalFilters.retake === '대상 아님' ? 'selected' : ''}>대상 아님</option>
+          </select>
+        </div>`}
+        <div class="field">
+          <label for="personalCategoryFilter">취약 카테고리</label>
+          <select id="personalCategoryFilter" class="select" data-personal-filter="category">
+            ${categories.map(c => `<option value="${c}" ${state.personalFilters.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderResultsTable() {
+    const filtered = getFilteredResults();
+
+    if (filtered.length === 0) {
+      return `
+        <div class="empty-state">
+          <div class="empty-state__icon">🔍</div>
+          <div class="empty-state__text">조건에 맞는 결과가 없습니다. 검색어 또는 필터를 변경해 주세요.</div>
+        </div>
+      `;
+    }
+
+    const isRetakeView = activeExamType === '재시험';
+    return `
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>이름</th>
+              <th>팀</th>
+              ${isRetakeView ? '<th>본시험 점수</th>' : '<th>본시험 점수</th>'}
+              ${isRetakeView ? '<th>재시험 점수</th>' : ''}
+              ${isRetakeView ? '<th>점수 변화</th>' : ''}
+              <th>합격 여부</th>
+              ${isRetakeView ? '<th>Tier 0 잔여</th>' : '<th>Tier 0 과락</th>'}
+              ${isRetakeView ? '<th>위험군 해제</th>' : '<th>취약 카테고리</th>'}
+              ${isRetakeView ? '<th>잔여 원인</th>' : ''}
+              ${isRetakeView ? '' : '<th>재시험 대상</th>'}
+              <th style="text-align: center;">상세</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filtered.map(person => {
+              if (isRetakeView) {
+                const improvement = person.score - person.firstAttemptScore;
+                const improvementBadgeClass = improvement >= 0 ? 'success' : 'danger';
+                const improvementText = improvement >= 0 ? `+${improvement}점` : `${improvement}점`;
+                const tier0ResidualBadge = person.firstAttemptTier0Fail && person.tier0Fail ? badge('해당', 'danger') : badge('해소', 'success');
+                const riskReleaseBadgeValue = person.wasRiskGroup ? (person.riskReleased ? badge('해제', 'success') : badge('유지', 'danger')) : badge('해당없음', 'neutral');
+
+                return `
+                  <tr>
+                    <td><strong>${person.name}</strong></td>
+                    <td>${person.team}</td>
+                    <td style="text-align: center; font-weight: 600;">${person.firstAttemptScore}점</td>
+                    <td style="text-align: center; font-weight: 600;">${person.score}점</td>
+                    <td>${badge(improvementText, improvementBadgeClass)}</td>
+                    <td>${person.passed ? badge('합격 전환', 'success') : badge('미달', 'danger')}</td>
+                    <td>${tier0ResidualBadge}</td>
+                    <td>${riskReleaseBadgeValue}</td>
+                    <td>${person.residualCause}</td>
+                    <td style="text-align: center;">
+                      <button type="button" class="btn btn-outline btn-sm" data-action="open-detail" data-person-id="${person.id}">
+                        상세보기
+                      </button>
+                    </td>
+                  </tr>
+                `;
+              } else {
+                return `
+                  <tr>
+                    <td><strong>${person.name}</strong></td>
+                    <td>${person.team}</td>
+                    <td style="text-align: center; font-weight: 600;">${person.score}점</td>
+                    <td>${person.passed ? badge('합격', 'success') : badge('불합격', 'danger')}</td>
+                    <td>${person.tier0Fail ? badge('해당', 'danger') : badge('아니오', 'neutral')}</td>
+                    <td>${person.weakCategory}</td>
+                    <td>${!person.passed ? badge('대상', 'warning') : badge('대상 아님', 'neutral')}</td>
+                    <td style="text-align: center;">
+                      <button type="button" class="btn btn-outline btn-sm" data-action="open-detail" data-person-id="${person.id}">
+                        상세보기
+                      </button>
+                    </td>
+                  </tr>
+                `;
+              }
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderDetailModal(person) {
+    const wrongAnswers = person.wrongAnswers;
+
+    if (wrongAnswers.length === 0) {
+      return `
+        <dialog class="modal modal--lg" open>
+          <div class="modal-head">
+            <h3>${person.name} · 오답 문항 상세</h3>
+            <button type="button" class="modal-close" onclick="this.closest('dialog').remove()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="empty-state">
+              <div class="empty-state__icon">✓</div>
+              <div class="empty-state__text">모든 문항을 올바르게 답변했습니다.</div>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button type="button" class="btn btn-outline" onclick="this.closest('dialog').remove()">닫기</button>
+          </div>
+        </dialog>
+      `;
+    }
+
+    return `
+      <dialog class="modal modal--lg" open>
+        <div class="modal-head">
+          <h3>${person.name} · 오답 문항 상세 (${wrongAnswers.length}개)</h3>
+          <button type="button" class="modal-close" onclick="this.closest('dialog').remove()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>카테고리</th>
+                  <th>선택한 답</th>
+                  <th>정답</th>
+                  <th>오답 원인</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${wrongAnswers.map(item => `
+                  <tr>
+                    <td><strong>${item.domain}</strong></td>
+                    <td>${item.selected}</td>
+                    <td>${item.correct}</td>
+                    <td>${badge(item.errorType, 'warning')}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-outline" onclick="this.closest('dialog').remove()">닫기</button>
+        </div>
+      </dialog>
+    `;
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // 초기 렌더링 및 이벤트 바인딩
+  // ─────────────────────────────────────────────────────────
+
+  function render() {
+    document.getElementById('filter-toolbar').innerHTML = renderFilterToolbar();
+    document.getElementById('filter-toolbar').style.display = 'flex';
+    document.getElementById('results-container').innerHTML = renderResultsTable();
+
+    // 필터 변경 이벤트
+    document.querySelectorAll('[data-personal-filter]').forEach(el => {
+      el.addEventListener('change', (e) => {
+        const key = e.target.dataset.personalFilter;
+        state.personalFilters[key] = e.target.value;
+        render();
+      });
+    });
+
+    // 검색 입력 이벤트
+    const searchEl = document.getElementById('personalSearch');
+    if (searchEl) {
+      searchEl.addEventListener('input', (e) => {
+        state.personalSearch = e.target.value;
+        render();
+      });
+    }
+
+    // 상세보기 버튼 이벤트
+    document.querySelectorAll('[data-action="open-detail"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const personId = e.target.dataset.personId;
+        const person = personResults.find(p => p.id === personId);
+        if (person) {
+          const modal = document.createElement('div');
+          modal.innerHTML = renderDetailModal(person);
+          document.getElementById('detail-modal-root').innerHTML = modal.innerHTML;
+        }
+      });
+    });
+  }
+
+  // 초기 렌더링
+  render();
+})();
+  </script>
+</body>
+</html>

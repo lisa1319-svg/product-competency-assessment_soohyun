@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>용어집 관리</title>
+<link rel="stylesheet" href="/shared/admin-design.css">
+</head>
+<body>
+<div class="shell"> <nav class="sidebar" id="sidebar"></nav> <header class="topbar" id="topbar"></header> <main class="main"><div class="content"> <div class="page-head"><div> <h1 class="page-title">용어집 관리</h1> <p class="page-desc">여기서 등록한 용어는 v2.html(용어집)에 즉시 반영되고, 등록 후 14일간 "새로 추가된 용어"에 NEW로 표시됩니다. 시험 범위 포함 시 학습자료 카드에도 노출됩니다.</p> </div> <button class="btn btn-primary" id="btn-new-term">새 용어 등록</button> </div> <div id="terms-container"></div> </div></main>
+</div> <!-- Modal: New/Edit Term -->
+<dialog class="modal" id="modal-term"> <div class="modal-head"> <h3 id="modal-term-title">새 용어 등록</h3> <button class="modal-close" onclick="document.getElementById('modal-term').close()">✕</button> </div> <div class="modal-body"> <div class="field-grid"> <div class="field-row"> <label class="field-label">분류 <span class="req">*</span></label> <div class="field-value"> <select id="form-category" class="input"> <option value="">분류 선택</option> <option value="제품 용어">제품 용어</option> <option value="추가 기능 용어">추가 기능 용어</option> <option value="UX 용어">UX 용어</option> <option value="IT 용어">IT 용어</option> <option value="종료 및 변경">종료 및 변경</option> </select> </div> </div> <div class="field-row"> <label class="field-label">구분(소분류)</label> <div class="field-value"> <input type="text" id="form-sub-category" class="input" placeholder="예: 주문/결제 (비워두면 소분류 없이 표시)"> </div> </div> <div class="field-row"> <label class="field-label">용어 <span class="req">*</span></label> <div class="field-value"> <input type="text" id="form-term" class="input" placeholder="예: 상품등록간편화"> </div> </div> <div class="field-row"> <label class="field-label">정의 <span class="req">*</span></label> <div class="field-value"> <textarea id="form-definition" class="input" placeholder="용어 정의" style="min-height:80px;"></textarea> </div> </div> <div class="field-row"> <label class="field-label">비고</label> <div class="field-value"> <input type="text" id="form-note" class="input" placeholder="선택 입력"> </div> </div> <div class="field-row"> <label class="field-label">출처 및 맥락</label> <div class="field-value"> <textarea id="form-context" class="input" placeholder="선택 입력 (근거 문서, 결정 배경 등)" style="min-height:60px;"></textarea> </div> </div> <div class="field-row"> <label class="field-label">대상 직군</label> <div class="field-value"> <div id="form-audience-group" style="display:flex; flex-wrap:wrap; gap:12px;"> <label style="display:inline-flex; align-items:center; gap:4px; font-size:var(--fs-sm);"><input type="checkbox" class="form-audience-checkbox" value="전체" checked> 전체</label> <label style="display:inline-flex; align-items:center; gap:4px; font-size:var(--fs-sm);"><input type="checkbox" class="form-audience-checkbox" value="영업"> 영업</label> <label style="display:inline-flex; align-items:center; gap:4px; font-size:var(--fs-sm);"><input type="checkbox" class="form-audience-checkbox" value="CS"> CS</label> <label style="display:inline-flex; align-items:center; gap:4px; font-size:var(--fs-sm);"><input type="checkbox" class="form-audience-checkbox" value="개발"> 개발</label> <label style="display:inline-flex; align-items:center; gap:4px; font-size:var(--fs-sm);"><input type="checkbox" class="form-audience-checkbox" value="기획/디자인"> 기획/디자인</label> </div> <p style="font-size:var(--fs-xs); color:var(--text-tertiary); margin-top:6px;">"전체"를 선택하면 다른 선택은 무시됩니다. 지금은 표시용 태그로만 쓰이고, 화면 자동 필터링은 아직 적용 전입니다.</p> </div> </div> <div class="field-row"> <label class="field-label">시험 범위</label> <div class="field-value"> <label style="display:inline-flex; align-items:center; gap:6px; font-size:var(--fs-sm);"> <input type="checkbox" id="form-exam-scope"> 학습자료(study.html)에도 노출 </label> </div> </div> </div> </div> <div class="modal-foot"> <button class="btn btn-outline" onclick="document.getElementById('modal-term').close()">취소</button> <button class="btn btn-primary" id="btn-save-term">등록</button> </div>
+</dialog> <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/shared/config.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/shared/nav.js"></script>
+<script>
+let allTerms = []
+let currentAuth = null
+let editingId = null
+
+async function init() {
+  const auth = await AUTH.requirePage({admin: true})
+  if (!auth) return
+  currentAuth = auth
+
+  renderAdminShell({
+    role: auth.role,
+    current: '/admin/glossary.html',
+    email: auth.email,
+    rounds: [],
+    sidebarMount: 'sidebar',
+    topbarMount: 'topbar'
+  })
+
+  await loadData()
+  renderTerms()
+
+  document.getElementById('btn-new-term').addEventListener('click', () => {
+    clearForm()
+    document.getElementById('modal-term-title').textContent = '새 용어 등록'
+    document.getElementById('modal-term').showModal()
+  })
+
+  document.getElementById('btn-save-term').addEventListener('click', saveTerm)
+
+  document.getElementById('form-audience-group').addEventListener('change', (e) => {
+    if (!e.target.classList.contains('form-audience-checkbox')) return
+    const checkboxes = document.querySelectorAll('.form-audience-checkbox')
+    if (e.target.value === '전체' && e.target.checked) {
+      checkboxes.forEach(cb => { if (cb.value !== '전체') cb.checked = false })
+    } else if (e.target.checked) {
+      const allCb = Array.from(checkboxes).find(cb => cb.value === '전체')
+      if (allCb) allCb.checked = false
+    }
+  })
+}
+
+async function loadData() {
+  const { data, error } = await AUTH.sb.from('glossary_terms').select('*').order('created_at', { ascending: false })
+  if (error) {
+    document.getElementById('terms-container').innerHTML = `
+      <div class="empty-state"> <div>불러오지 못했습니다: ${escapeHtml(error.message)}</div> <div style="font-size:var(--fs-xs); color:var(--text-tertiary); margin-top:4px;">glossary_terms 테이블이 아직 없다면 supabase/schema.sql을 SQL Editor에서 실행해주세요.</div> </div>`
+    allTerms = []
+    return
+  }
+  allTerms = data || []
+}
+
+function isNew(createdAt) {
+  const days = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24)
+  return days <= 14
+}
+
+function renderTerms() {
+  const container = document.getElementById('terms-container')
+
+  if (allTerms.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state"> <div class="empty-state__icon"></div> <div>등록된 용어가 없습니다</div> <button class="btn btn-primary" id="btn-new-term-empty" style="margin-top:8px;">새 용어 등록</button> </div> `
+    const emptyBtn = document.getElementById('btn-new-term-empty')
+    if (emptyBtn) {
+      emptyBtn.addEventListener('click', () => {
+        clearForm()
+        document.getElementById('modal-term-title').textContent = '새 용어 등록'
+        document.getElementById('modal-term').showModal()
+      })
+    }
+    return
+  }
+
+  const rows = allTerms.map(t => {
+    const audience = Array.isArray(t.audience) ? t.audience.join(', ') : '전체'
+    const registeredDate = new Date(t.created_at).toLocaleDateString('ko-KR')
+    return `
+      <tr> <td>${isNew(t.created_at) ? '<span class="badge badge--danger">NEW</span> ' : ''}<strong>${escapeHtml(t.term)}</strong></td> <td>${escapeHtml(t.category)}${t.sub_category ? ` / ${escapeHtml(t.sub_category)}` : ''}</td> <td style="color:var(--text-tertiary); font-size:var(--fs-xs); max-width:320px;">${escapeHtml(t.definition)}</td> <td>${escapeHtml(audience)}</td> <td style="text-align:center;">${t.exam_scope ? '✓' : '—'}</td> <td>${registeredDate}</td> <td style="white-space:nowrap;"> <button class="btn btn-sm btn-danger" onclick="deleteTerm('${t.id}')">삭제</button> </td> </tr> `
+  }).join('')
+
+  container.innerHTML = `
+    <div class="table-wrap"> <table class="data-table"> <thead> <tr> <th>용어</th> <th>분류</th> <th>정의</th> <th>대상 직군</th> <th style="text-align:center;">시험범위</th> <th>등록일</th> <th style="width:80px;">작업</th> </tr> </thead> <tbody> ${rows}
+        </tbody> </table> </div> `
+}
+
+async function saveTerm() {
+  const category = document.getElementById('form-category').value.trim()
+  const subCategory = document.getElementById('form-sub-category').value.trim()
+  const term = document.getElementById('form-term').value.trim()
+  const definition = document.getElementById('form-definition').value.trim()
+  const note = document.getElementById('form-note').value.trim()
+  const context = document.getElementById('form-context').value.trim()
+  const examScope = document.getElementById('form-exam-scope').checked
+  const audience = Array.from(document.querySelectorAll('.form-audience-checkbox:checked')).map(cb => cb.value)
+
+  if (!category || !term || !definition) {
+    alert('분류, 용어, 정의는 필수입니다.')
+    return
+  }
+
+  try {
+    const { error } = await AUTH.sb.from('glossary_terms').insert([{
+      category,
+      sub_category: subCategory || null,
+      term,
+      definition,
+      note: note || null,
+      context: context || null,
+      audience: audience.length ? audience : ['전체'],
+      exam_scope: examScope,
+      created_by: currentAuth.email
+    }])
+
+    if (error) throw error
+
+    await logAudit('glossary.create', `"${term}" (${category}) 생성`)
+    document.getElementById('modal-term').close()
+    await loadData()
+    renderTerms()
+  } catch (err) {
+    alert('저장 실패: ' + err.message)
+  }
+}
+
+async function deleteTerm(id) {
+  if (!confirm('이 용어를 삭제하시겠습니까?')) return
+
+  try {
+    const term = allTerms.find(t => t.id === id)
+    const { error } = await AUTH.sb.from('glossary_terms').delete().eq('id', id)
+
+    if (error) throw error
+
+    await logAudit('glossary.delete', `"${term?.term}" 삭제`)
+    await loadData()
+    renderTerms()
+  } catch (err) {
+    alert('삭제 실패: ' + err.message)
+  }
+}
+
+async function logAudit(action, detail) {
+  await AUTH.sb.from('admin_audit_log').insert([{
+    actor_email: currentAuth.email,
+    action,
+    detail
+  }])
+}
+
+function clearForm() {
+  editingId = null
+  document.getElementById('form-category').value = ''
+  document.getElementById('form-sub-category').value = ''
+  document.getElementById('form-term').value = ''
+  document.getElementById('form-definition').value = ''
+  document.getElementById('form-note').value = ''
+  document.getElementById('form-context').value = ''
+  document.getElementById('form-exam-scope').checked = false
+  document.querySelectorAll('.form-audience-checkbox').forEach(cb => { cb.checked = cb.value === '전체' })
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+init()
+</script>
+</body>
+</html>

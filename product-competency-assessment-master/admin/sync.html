@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>내부 싱크 분석</title>
+  <link rel="stylesheet" href="/shared/admin-design.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="/shared/config.js"></script>
+  <script src="/shared/auth.js"></script>
+  <script src="/shared/nav.js"></script>
+  <style>
+    .tabs-container { margin-bottom: 20px; }
+    .tab-content { display: none; animation: fadeIn 0.2s; }
+    .tab-content.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .metric-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px; }
+    .metric-card { background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 16px 18px; box-shadow: var(--shadow-panel); }
+    .metric-label { font-size: var(--fs-xs); color: var(--text-tertiary); font-weight: 600; margin-bottom: 8px; }
+    .metric-value { font-size: 22px; font-weight: 800; color: var(--text-primary); }
+    .metric-delta { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 4px; }
+
+    .section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; gap: 8px; }
+    .section-head h3 { font-size: var(--fs-md); font-weight: 700; }
+    .section-desc { font-size: var(--fs-sm); color: var(--text-tertiary); }
+
+    .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    @media (max-width: 900px) { .comparison-grid { grid-template-columns: 1fr; } }
+    .comparison-card { background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 16px 18px; }
+    .comparison-card__label { font-size: var(--fs-xs); font-weight: 600; color: var(--text-tertiary); margin-bottom: 8px; }
+    .comparison-card__value { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
+    .comparison-card__meta { font-size: var(--fs-xs); color: var(--text-muted); }
+
+    .pill-matrix { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .pill-matrix-item { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 12px; background: var(--surface); box-shadow: var(--shadow-panel); }
+    .pill-matrix-item strong { display: block; margin-top: 6px; font-size: 16px; color: var(--text-primary); }
+    .pill-matrix-item .metric-label { margin-bottom: 4px; }
+    .pill-matrix-item .metric-note { margin-top: 6px; font-size: var(--fs-xs); color: var(--text-tertiary); }
+
+    .mini-bar-list { display: flex; flex-direction: column; gap: 10px; }
+    .mini-bar-item { display: flex; align-items: center; gap: 8px; }
+    .mini-bar-item__label { font-size: var(--fs-sm); font-weight: 600; color: var(--text-secondary); min-width: 100px; }
+    .mini-bar-item__track { flex: 1; height: 12px; background: var(--border-subtle); border-radius: 6px; overflow: hidden; }
+    .mini-bar-item__fill { height: 100%; border-radius: 6px; background: var(--accent); }
+    .mini-bar-item__value { font-size: var(--fs-xs); font-weight: 700; color: var(--text-secondary); min-width: 40px; text-align: right; }
+
+    .team-detail-panel { background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 16px 18px; margin-top: 14px; }
+    .team-detail-panel h4 { font-size: var(--fs-md); font-weight: 700; margin-bottom: 16px; margin-top: 0; }
+    .team-detail-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+    .team-detail-item { }
+    .team-detail-item__label { font-size: var(--fs-xs); color: var(--text-tertiary); font-weight: 600; margin-bottom: 6px; }
+    .team-detail-item__value { font-size: 20px; font-weight: 800; color: var(--text-primary); }
+
+    .table-wrap { overflow-x: auto; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); }
+    .table-wrap--scroll { max-height: 420px; overflow-y: auto; }
+    .data-table { width: 100%; font-size: var(--fs-sm); }
+    .data-table thead th { position: sticky; top: 0; background: var(--surface-sunken); color: var(--text-tertiary); font-weight: 700; text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+    .data-table tbody td { padding: 10px 14px; border-bottom: 1px solid var(--border-subtle); color: var(--text-primary); }
+    .data-table tbody tr:last-child td { border-bottom: none; }
+    .data-table tbody tr:hover { background: var(--surface-sunken); }
+    .data-table .btn-sm { padding: 4px 8px; font-size: var(--fs-xs); }
+
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 48px 20px; color: var(--text-muted); font-size: var(--fs-sm); text-align: center; }
+    .empty-state__icon { font-size: 32px; margin-bottom: 4px; }
+
+    .filter-toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+    .filter-toolbar select { padding: 8px 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); font-size: var(--fs-sm); background: var(--surface); color: var(--text-primary); }
+
+    .sync-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 900px) { .sync-grid-2 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav class="sidebar" id="sidebar"></nav>
+    <header class="topbar" id="topbar"></header>
+    <main class="main">
+      <div class="content">
+        <div class="page-head">
+          <div>
+            <h1 class="page-title" id="sync-page-title">내부 싱크 분석</h1>
+            <p class="page-desc" id="sync-page-desc">제품·기능·공식 용어·고객 안내 기준이 조직 내에서 얼마나 일관되게 이해되고 있는지 확인합니다.</p>
+          </div>
+        </div>
+
+        <!-- 탭 네비게이션 -->
+        <div class="tabs-container">
+          <div class="tabs">
+            <button class="tab-item active" onclick="switchTab('sync-overview')">싱크 현황</button>
+            <button class="tab-item" onclick="switchTab('sync-team')">팀별 비교</button>
+            <button class="tab-item" onclick="switchTab('sync-issues')">싱크 이슈 상세</button>
+          </div>
+        </div>
+
+        <!-- 탭 1: 싱크 현황 -->
+        <div id="sync-overview" class="tab-content active">
+          <!-- 6개 메트릭 카드 -->
+          <div class="metric-row">
+            <div class="metric-card">
+              <div class="metric-label">전체 싱크 점수</div>
+              <div class="metric-value" id="sync-score-value">-</div>
+              <div class="metric-delta" id="sync-score-delta"></div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">기준·용어 정답률</div>
+              <div class="metric-value" id="term-rate-value">-</div>
+              <div class="metric-delta" id="term-rate-delta">공식 명칭·금지 표현 기준</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">구버전 기준 선택률</div>
+              <div class="metric-value" id="old-rate-value">-</div>
+              <div class="metric-delta" id="old-rate-delta">현재 기준과 다른 보기</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">비공식·오용어 선택률</div>
+              <div class="metric-value" id="misuse-rate-value">-</div>
+              <div class="metric-delta" id="misuse-rate-delta">현장 별칭·오용어 보기</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">유사 기능 혼동률</div>
+              <div class="metric-value" id="confusion-rate-value">-</div>
+              <div class="metric-delta" id="confusion-rate-delta">비슷한 기능과 혼동</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">싱크 검토 필요 팀</div>
+              <div class="metric-value" id="need-team-count-value">-</div>
+              <div class="metric-delta">75점 미만 팀 기준</div>
+            </div>
+          </div>
+          <div class="inline-note" id="sync-retake-note" style="display:none; margin-top:14px; padding:10px 14px; background:var(--surface-sunken); border-radius:var(--radius-md); font-size:var(--fs-sm); color:var(--text-secondary);"></div>
+
+          <!-- 싱크 상태 해석 + 관리자 확인사항 -->
+          <div class="sync-grid-2">
+            <div>
+              <div class="section-head"><h3>싱크 상태 해석</h3></div>
+              <div class="pill-matrix">
+                <div class="pill-matrix-item">
+                  <span class="metric-label">85점 이상</span>
+                  <strong>안정</strong>
+                  <div class="metric-note">조직 기준이 비교적 일관됨</div>
+                </div>
+                <div class="pill-matrix-item">
+                  <span class="metric-label">75~84점</span>
+                  <strong>보완 필요</strong>
+                  <div class="metric-note">특정 기준·용어 점검 필요</div>
+                </div>
+                <div class="pill-matrix-item">
+                  <span class="metric-label">75점 미만</span>
+                  <strong>우선 점검</strong>
+                  <div class="metric-note">팀 단위 보완 조치 필요</div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="section-head"><h3>관리자가 지금 확인할 것</h3></div>
+              <div class="mini-bar-list">
+                <div class="mini-bar-item">
+                  <span class="mini-bar-item__label">구버전 기준</span>
+                  <div class="mini-bar-item__track"><div class="mini-bar-item__fill" id="bar-old" style="width: 0%;"></div></div>
+                  <span class="mini-bar-item__value" id="bar-old-text">0%</span>
+                </div>
+                <div class="mini-bar-item">
+                  <span class="mini-bar-item__label">비공식·오용어</span>
+                  <div class="mini-bar-item__track"><div class="mini-bar-item__fill" id="bar-misuse" style="width: 0%;"></div></div>
+                  <span class="mini-bar-item__value" id="bar-misuse-text">0%</span>
+                </div>
+                <div class="mini-bar-item">
+                  <span class="mini-bar-item__label">유사 기능 혼동</span>
+                  <div class="mini-bar-item__track"><div class="mini-bar-item__fill" id="bar-confusion" style="width: 0%;"></div></div>
+                  <span class="mini-bar-item__value" id="bar-confusion-text">0%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 주요 싱크 이슈 TOP5 -->
+          <div style="margin-top: 20px;">
+            <div class="section-head"><h3>주요 싱크 이슈 TOP 5</h3></div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>순위</th>
+                    <th>문항 또는 기준명</th>
+                    <th>관련 카테고리</th>
+                    <th>주요 오답 유형</th>
+                    <th>영향 팀 수</th>
+                    <th>오답자 수</th>
+                    <th>상세보기</th>
+                  </tr>
+                </thead>
+                <tbody id="top-issues-body">
+                  <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">데이터 로드 중...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="empty-state-sync-overview" style="display: none;">
+            <div class="empty-state">
+              <div class="empty-state__icon">📊</div>
+              <p>아직 완료된 응시 데이터가 없습니다.</p>
+              <p>응시자가 평가를 완료한 후 싱크 분석이 표시됩니다.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 탭 2: 팀별 비교 -->
+        <div id="sync-team" class="tab-content">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>팀명</th>
+                  <th>팀 싱크 점수</th>
+                  <th>기준·용어 정답률</th>
+                  <th>구버전 선택률</th>
+                  <th>오용어 선택률</th>
+                  <th>유사 기능 혼동률</th>
+                  <th>동일 오답 집중도</th>
+                  <th>주요 취약 영역</th>
+                  <th>상태</th>
+                  <th>상세</th>
+                </tr>
+              </thead>
+              <tbody id="team-comparison-body">
+                <tr><td colspan="10" style="text-align: center; color: var(--text-muted);">데이터 로드 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 팀 상세 패널 (아코디언) -->
+          <div id="team-detail-section" style="display: none;">
+            <div class="team-detail-panel" id="team-detail-content"></div>
+          </div>
+
+          <div id="empty-state-sync-team" style="display: none;">
+            <div class="empty-state">
+              <div class="empty-state__icon">👥</div>
+              <p>아직 완료된 응시 데이터가 없습니다.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 탭 3: 싱크 이슈 상세 -->
+        <div id="sync-issues" class="tab-content">
+          <div class="filter-toolbar">
+            <select id="issue-filter-category" onchange="updateIssueFilters()">
+              <option value="">카테고리: 전체</option>
+              <option value="기본 IT 용어">기본 IT 용어</option>
+              <option value="POS 자동연동">POS 자동연동</option>
+              <option value="티오더 AI">티오더 AI</option>
+            </select>
+            <select id="issue-filter-axis" onchange="updateIssueFilters()">
+              <option value="">역량축: 전체</option>
+              <option value="1">축1</option>
+              <option value="2">축2</option>
+              <option value="3">축3</option>
+              <option value="4">축4</option>
+              <option value="5">축5</option>
+            </select>
+            <select id="issue-filter-tier" onchange="updateIssueFilters()">
+              <option value="">Tier: 전체</option>
+              <option value="0">Tier 0</option>
+              <option value="1">Tier 1</option>
+              <option value="2">Tier 2</option>
+            </select>
+          </div>
+
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>문항</th>
+                  <th>관련 카테고리</th>
+                  <th>오답 유형</th>
+                  <th>전체 오답률</th>
+                  <th>동일 오답 비율</th>
+                  <th>영향 팀</th>
+                  <th>상세보기</th>
+                </tr>
+              </thead>
+              <tbody id="issues-body">
+                <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">데이터 로드 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div id="empty-state-sync-issues" style="display: none;">
+            <div class="empty-state">
+              <div class="empty-state__icon">📋</div>
+              <p>아직 완료된 응시 데이터가 없습니다.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // 전역 상태
+    let currentRoundId = null;
+    let currentExamType = '본시험';
+    let roundsList = [];
+    let analysisData = null;
+    let analysisDataBefore = null;
+    let state = {
+      syncTeamDetail: null,
+      issueFilters: { category: '', axis: '', tier: '' }
+    };
+
+    async function init() {
+      const auth = await AUTH.requirePage({ admin: true });
+      if (!auth) return;
+
+      // 회차 목록 조회
+      const { data: roundsData } = await AUTH.sb.from('exam_rounds').select('id,label,active,opens_at,closes_at').order('created_at', { ascending: false });
+      roundsList = roundsData || [];
+
+      // 현재 회차 결정
+      const urlRound = new URLSearchParams(location.search).get('round');
+      if (urlRound && roundsList.find(r => r.id === urlRound)) {
+        currentRoundId = urlRound;
+      } else {
+        const activeRound = roundsList.find(r => r.active);
+        currentRoundId = activeRound ? activeRound.id : (roundsList[0]?.id || null);
+      }
+      currentExamType = new URLSearchParams(location.search).get('examType') === '재시험' ? '재시험' : '본시험';
+
+      // 사이드바·탑바 렌더링
+      renderAdminShell({
+        role: auth.role,
+        current: '/admin/sync.html',
+        email: auth.email,
+        rounds: roundsList,
+        activeRoundId: currentRoundId,
+        examType: currentExamType,
+        showExamTypeToggle: true,
+        onRoundChange: (roundId) => {
+          location.href = '/admin/sync.html?round=' + roundId + '&examType=' + encodeURIComponent(currentExamType);
+        },
+        onExamTypeChange: (type) => {
+          location.href = '/admin/sync.html?round=' + currentRoundId + '&examType=' + encodeURIComponent(type);
+        },
+        sidebarMount: 'sidebar',
+        topbarMount: 'topbar'
+      });
+
+      if (currentRoundId) {
+        await loadAnalysis();
+      }
+    }
+
+    async function loadAnalysis() {
+      try {
+        // 문항 데이터
+        const { data: questions } = await AUTH.sb.from('questions').select('id,qid,tier,axis,domain,question_text,options,correct_index,option_tags,status').eq('status', 'published');
+        const questionMap = {};
+        (questions || []).forEach(q => {
+          questionMap[q.id] = q;
+        });
+
+        // 현재 회차 응시 데이터 (제출 완료)
+        const { data: attempts } = await AUTH.sb
+          .from('exam_attempts')
+          .select('id,user_email,answers,submitted_at,round_id,score,passed')
+          .eq('round_id', currentRoundId)
+          .eq('is_retake', currentExamType === '재시험')
+          .not('submitted_at', 'is', null);
+
+        // 응시자별 최신 시도만
+        const latestAttempts = {};
+        (attempts || []).forEach(a => {
+          if (!latestAttempts[a.user_email] || new Date(a.submitted_at) > new Date(latestAttempts[a.user_email].submitted_at)) {
+            latestAttempts[a.user_email] = a;
+          }
+        });
+        const attemptList = Object.values(latestAttempts);
+
+        if (attemptList.length === 0) {
+          showEmptyState();
+          return;
+        }
+
+        // 응시자 정보
+        const { data: employees } = await AUTH.sb.from('employees').select('email,name,team,eligible,cluster');
+        const employeeMap = {};
+        (employees || []).forEach(e => {
+          employeeMap[e.email] = e;
+        });
+
+        // 데이터 분석
+        analysisData = analyzeSyncData(
+          attemptList,
+          questionMap,
+          employeeMap
+        );
+
+        // 재시험 모드: 같은 회차의 본시험(원본) 싱크 지표도 계산 — 개선폭 비교용 (가짜 수치 없음)
+        analysisDataBefore = null;
+        if (currentExamType === '재시험') {
+          const { data: beforeAttempts } = await AUTH.sb
+            .from('exam_attempts')
+            .select('id,user_email,answers,submitted_at,round_id,score,passed')
+            .eq('round_id', currentRoundId)
+            .eq('is_retake', false)
+            .not('submitted_at', 'is', null);
+          const latestBefore = {};
+          (beforeAttempts || []).forEach(a => {
+            if (!latestBefore[a.user_email] || new Date(a.submitted_at) > new Date(latestBefore[a.user_email].submitted_at)) {
+              latestBefore[a.user_email] = a;
+            }
+          });
+          const beforeList = Object.values(latestBefore);
+          if (beforeList.length > 0) {
+            analysisDataBefore = analyzeSyncData(beforeList, questionMap, employeeMap);
+          }
+        }
+
+        // UI 업데이트
+        renderSyncOverview();
+        renderSyncTeamComparison();
+        renderSyncIssueDetail();
+      } catch (err) {
+        console.error('Analysis error:', err);
+      }
+    }
+
+    function analyzeSyncData(attempts, questionMap, employeeMap) {
+      // 기본 집계
+      const resultsByEmail = {};
+      const domainStats = {};
+      const questionStats = {};
+      const teamStats = {};
+
+      attempts.forEach(attempt => {
+        if (!attempt.answers) return;
+
+        const email = attempt.user_email;
+        const emp = employeeMap[email] || {};
+        const team = emp.team || 'Unknown';
+
+        if (!resultsByEmail[email]) {
+          resultsByEmail[email] = { email, name: emp.name || email, team, score: attempt.score, answers: attempt.answers };
+        }
+
+        if (!teamStats[team]) {
+          teamStats[team] = { team, syncScore: 0, termRate: 0, oldRate: 0, misuseRate: 0, confusionRate: 0, concentrationCount: 0, weakCategory: '', members: [], totalCorrect: 0, totalQuestions: 0, layer2Count: 0, misuseCount: 0, confusionCount: 0, allAnswers: [] };
+        }
+        teamStats[team].members.push(email);
+
+        Object.entries(attempt.answers).forEach(([qid, ans]) => {
+          const q = questionMap[qid];
+          if (!q) return;
+
+          const isCorrect = ans.selected === ans.correct;
+          const domain = q.domain;
+          const axis = q.axis;
+
+          if (!domainStats[domain]) domainStats[domain] = { correct: 0, total: 0, wrongCount: 0, layer2: 0, misuse: 0, confusion: 0, responses: [] };
+          if (!questionStats[qid]) questionStats[qid] = { qid: q.qid, domain, axis, correct: 0, total: 0, responses: [], tags: q.option_tags || [] };
+
+          domainStats[domain].total++;
+          questionStats[qid].total++;
+          teamStats[team].totalQuestions++;
+          teamStats[team].allAnswers.push({ qid, selected: ans.selected, correct: ans.correct });
+
+          if (isCorrect) {
+            domainStats[domain].correct++;
+            questionStats[qid].correct++;
+            teamStats[team].totalCorrect++;
+          } else {
+            domainStats[domain].wrongCount++;
+            const layer = classifyErrorLayer(ans, q);
+            if (layer === 'old') { domainStats[domain].layer2++; teamStats[team].layer2Count++; }
+            if (layer === 'misuse') { domainStats[domain].misuse++; teamStats[team].misuseCount++; }
+            if (layer === 'confusion') { domainStats[domain].confusion++; teamStats[team].confusionCount++; }
+          }
+
+          domainStats[domain].responses.push({ email, selected: ans.selected, correct: ans.correct });
+          questionStats[qid].responses.push({ email, selected: ans.selected, correct: ans.correct });
+        });
+      });
+
+      // 각 팀의 싱크 점수 계산 (간단한 계산식: 100 - (구버전+오용어+혼동 비율 * 100))
+      Object.entries(teamStats).forEach(([team, stats]) => {
+        const errorRate = stats.totalQuestions > 0 ? ((stats.layer2Count + stats.misuseCount + stats.confusionCount) / stats.totalQuestions) * 100 : 0;
+        stats.syncScore = Math.max(0, Math.round(100 - errorRate));
+        stats.termRate = Math.round((stats.totalCorrect / stats.totalQuestions) * 100);
+
+        // 오답 유형 비율 계산 (구버전정책/타팀용어/유사기능혼동 3종 오답 대비 비중)
+        const totalWrong = stats.layer2Count + stats.misuseCount + stats.confusionCount;
+        stats.oldRate = totalWrong > 0 ? Math.round((stats.layer2Count / totalWrong) * 100) : 0;
+        stats.misuseRate = totalWrong > 0 ? Math.round((stats.misuseCount / totalWrong) * 100) : 0;
+        stats.confusionRate = totalWrong > 0 ? Math.round((stats.confusionCount / totalWrong) * 100) : 0;
+        stats.concentrationCount = countConcentratedIssues(stats.allAnswers, questionMap);
+        stats.weakCategory = findWeakestCategory(stats.allAnswers, questionMap);
+      });
+
+      // 전체 싱크 점수 (모든 응시자 평균)
+      const allTeamScores = Object.values(teamStats).map(t => t.syncScore);
+      const syncScore = allTeamScores.length > 0 ? Math.round(allTeamScores.reduce((a, b) => a + b) / allTeamScores.length) : 0;
+
+      // 전체 오답 유형 비율
+      const totalLayer2 = Object.values(domainStats).reduce((a, b) => a + b.layer2, 0);
+      const totalMisuse = Object.values(domainStats).reduce((a, b) => a + b.misuse, 0);
+      const totalConfusion = Object.values(domainStats).reduce((a, b) => a + b.confusion, 0);
+      const totalWrong = Object.values(domainStats).reduce((a, b) => a + b.wrongCount, 0);
+      const totalQuestions = Object.values(domainStats).reduce((a, b) => a + b.total, 0);
+      const totalClassifiedWrong = totalLayer2 + totalMisuse + totalConfusion;
+
+      const oldRate = totalClassifiedWrong > 0 ? Math.round((totalLayer2 / totalClassifiedWrong) * 100) : 0;
+      const misuseRate = totalClassifiedWrong > 0 ? Math.round((totalMisuse / totalClassifiedWrong) * 100) : 0;
+      const confusionRate = totalClassifiedWrong > 0 ? Math.round((totalConfusion / totalClassifiedWrong) * 100) : 0;
+
+      const termRate = totalQuestions > 0 ? Math.round(((totalQuestions - totalWrong) / totalQuestions) * 100) : 0;
+      const needTeamCount = Object.values(teamStats).filter(t => t.syncScore < 75).length;
+
+      return {
+        syncScore,
+        termRate,
+        oldRate,
+        misuseRate,
+        confusionRate,
+        needTeamCount,
+        resultsByEmail,
+        domainStats,
+        questionStats,
+        teamStats,
+        allTeamScores
+      };
+    }
+
+    // option_tags 기준 정확한 오답 유형 분류: '구버전 정책' | '타 팀 용어' | '유사 기능 혼동' | 그 외(완전 무관/미응답)
+    function classifyErrorLayer(ans, question) {
+      if (ans.selected === null || ans.selected === undefined) return 'unrelated';
+      const tags = question.option_tags || [];
+      const tag = tags[ans.selected] || '';
+      if (tag === '구버전 정책') return 'old';
+      if (tag === '타 팀 용어') return 'misuse';
+      if (tag === '유사 기능 혼동') return 'confusion';
+      return 'unrelated';
+    }
+
+    function countConcentratedIssues(allAnswers, questionMap) {
+      const qidCounts = {};
+      allAnswers.forEach(ans => {
+        if (ans.selected !== ans.correct) {
+          const key = ans.qid + '_' + ans.selected;
+          qidCounts[key] = (qidCounts[key] || 0) + 1;
+        }
+      });
+      return Object.values(qidCounts).filter(count => count >= Math.max(2, allAnswers.length / 3)).length;
+    }
+
+    function findWeakestCategory(allAnswers, questionMap) {
+      const categoryWrong = {};
+      const categoryTotal = {};
+      allAnswers.forEach(ans => {
+        const q = questionMap[ans.qid];
+        if (!q) return;
+        categoryTotal[q.domain] = (categoryTotal[q.domain] || 0) + 1;
+        if (ans.selected !== ans.correct) {
+          categoryWrong[q.domain] = (categoryWrong[q.domain] || 0) + 1;
+        }
+      });
+
+      let weakest = '';
+      let worstRate = 0;
+      Object.entries(categoryWrong).forEach(([category, wrong]) => {
+        const rate = categoryTotal[category] ? (wrong / categoryTotal[category]) : 0;
+        if (rate > worstRate) {
+          worstRate = rate;
+          weakest = category;
+        }
+      });
+      return weakest || '-';
+    }
+
+    function showEmptyState() {
+      document.getElementById('empty-state-sync-overview').style.display = 'block';
+      document.getElementById('empty-state-sync-team').style.display = 'block';
+      document.getElementById('empty-state-sync-issues').style.display = 'block';
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-item').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    function renderSyncOverview() {
+      if (!analysisData) return;
+
+      const data = analysisData;
+      const isRetake = currentExamType === '재시험';
+      const before = isRetake ? analysisDataBefore : null;
+
+      document.getElementById('sync-page-title').textContent = isRetake ? '재시험 싱크 개선 결과' : '내부 싱크 분석';
+      document.getElementById('sync-page-desc').textContent = isRetake
+        ? '본시험 이후 재교육과 재시험을 통해 제품·기능·공식 용어·고객 안내 기준의 싱크가 얼마나 개선됐는지 확인합니다.'
+        : '제품·기능·공식 용어·고객 안내 기준이 조직 내에서 얼마나 일관되게 이해되고 있는지 확인합니다.';
+
+      document.getElementById('sync-score-value').textContent = data.syncScore + '점';
+      document.getElementById('sync-score-delta').textContent = data.syncScore >= 85 ? '안정' : (data.syncScore >= 75 ? '보완 필요' : '우선 점검');
+      document.getElementById('term-rate-value').textContent = data.termRate + '%';
+      document.getElementById('old-rate-value').textContent = data.oldRate + '%';
+      document.getElementById('misuse-rate-value').textContent = data.misuseRate + '%';
+      document.getElementById('confusion-rate-value').textContent = data.confusionRate + '%';
+      document.getElementById('need-team-count-value').textContent = data.needTeamCount + '개';
+
+      const noteEl = document.getElementById('sync-retake-note');
+      if (isRetake && before) {
+        document.getElementById('term-rate-delta').textContent = `본시험 ${before.termRate}%`;
+        document.getElementById('old-rate-delta').textContent = `-${Math.max(0, Number((before.oldRate - data.oldRate).toFixed(1)))}%p`;
+        document.getElementById('misuse-rate-delta').textContent = `-${Math.max(0, Number((before.misuseRate - data.misuseRate).toFixed(1)))}%p`;
+        document.getElementById('confusion-rate-delta').textContent = `-${Math.max(0, Number((before.confusionRate - data.confusionRate).toFixed(1)))}%p`;
+        const delta = Number((data.syncScore - before.syncScore).toFixed(1));
+        noteEl.textContent = `재시험 싱크 점수는 본시험 ${before.syncScore}점에서 ${data.syncScore}점으로 ${delta >= 0 ? '+' : ''}${delta}점 변화했습니다.`;
+        noteEl.style.display = 'block';
+      } else if (isRetake && !before) {
+        noteEl.textContent = '본시험 응시 이력이 없어 개선폭을 비교할 수 없습니다.';
+        noteEl.style.display = 'block';
+        document.getElementById('term-rate-delta').textContent = '공식 명칭·금지 표현 기준';
+        document.getElementById('old-rate-delta').textContent = '현재 기준과 다른 보기';
+        document.getElementById('misuse-rate-delta').textContent = '현장 별칭·오용어 보기';
+        document.getElementById('confusion-rate-delta').textContent = '비슷한 기능과 혼동';
+      } else {
+        noteEl.style.display = 'none';
+        document.getElementById('term-rate-delta').textContent = '공식 명칭·금지 표현 기준';
+        document.getElementById('old-rate-delta').textContent = '현재 기준과 다른 보기';
+        document.getElementById('misuse-rate-delta').textContent = '현장 별칭·오용어 보기';
+        document.getElementById('confusion-rate-delta').textContent = '비슷한 기능과 혼동';
+      }
+
+      // 미니 바 업데이트
+      document.getElementById('bar-old').style.width = Math.min(data.oldRate, 100) + '%';
+      document.getElementById('bar-old-text').textContent = data.oldRate + '%';
+      document.getElementById('bar-misuse').style.width = Math.min(data.misuseRate, 100) + '%';
+      document.getElementById('bar-misuse-text').textContent = data.misuseRate + '%';
+      document.getElementById('bar-confusion').style.width = Math.min(data.confusionRate, 100) + '%';
+      document.getElementById('bar-confusion-text').textContent = data.confusionRate + '%';
+
+      // TOP 5 이슈 렌더링
+      const topIssues = getTopSyncIssues().slice(0, 5);
+      const tbody = document.getElementById('top-issues-body');
+      const html = topIssues.map((issue, idx) => {
+        const tag = issue.dominantTag || '기타';
+        return `<tr>
+          <td>${idx + 1}</td>
+          <td>${issue.qid}</td>
+          <td>${issue.domain}</td>
+          <td><span class="badge badge--info">${tag}</span></td>
+          <td>${issue.affectedTeams.size}</td>
+          <td>${issue.wrongCount}</td>
+          <td><button class="btn btn-sm" onclick="showQuestionDetail('${issue.qid}')">상세보기</button></td>
+        </tr>`;
+      }).join('');
+      tbody.innerHTML = html || '<tr><td colspan="7" style="text-align: center;">이슈가 없습니다.</td></tr>';
+
+      document.getElementById('empty-state-sync-overview').style.display = 'none';
+    }
+
+    function renderSyncTeamComparison() {
+      if (!analysisData) return;
+
+      const teams = Object.values(analysisData.teamStats);
+      const tbody = document.getElementById('team-comparison-body');
+      const html = teams.map(team => {
+        const statusBadge = team.syncScore >= 85 ? '안정' : (team.syncScore >= 75 ? '보완' : '우선');
+        const statusClass = team.syncScore >= 85 ? 'badge--success' : (team.syncScore >= 75 ? 'badge--warning' : 'badge--danger');
+        return `<tr>
+          <td>${team.team}</td>
+          <td><strong>${team.syncScore}점</strong></td>
+          <td>${team.termRate}%</td>
+          <td>${team.oldRate}%</td>
+          <td>${team.misuseRate}%</td>
+          <td>${team.confusionRate}%</td>
+          <td>${team.concentrationCount}</td>
+          <td>${team.weakCategory}</td>
+          <td><span class="badge ${statusClass}">${statusBadge}</span></td>
+          <td><button class="btn btn-sm" onclick="toggleTeamDetail('${team.team}')">상세보기</button></td>
+        </tr>`;
+      }).join('');
+      tbody.innerHTML = html || '<tr><td colspan="10" style="text-align: center;">데이터가 없습니다.</td></tr>';
+
+      document.getElementById('empty-state-sync-team').style.display = 'none';
+    }
+
+    function toggleTeamDetail(teamName) {
+      if (state.syncTeamDetail === teamName) {
+        state.syncTeamDetail = null;
+        document.getElementById('team-detail-section').style.display = 'none';
+      } else {
+        state.syncTeamDetail = teamName;
+        const team = analysisData.teamStats[teamName];
+        if (team) {
+          renderTeamDetail(team);
+        }
+      }
+    }
+
+    function renderTeamDetail(team) {
+      const html = `
+        <h4>${team.team} 싱크 상세</h4>
+        <div class="team-detail-row">
+          <div class="team-detail-item">
+            <div class="team-detail-item__label">팀 싱크 점수</div>
+            <div class="team-detail-item__value">${team.syncScore}점</div>
+          </div>
+          <div class="team-detail-item">
+            <div class="team-detail-item__label">기준·용어 정답률</div>
+            <div class="team-detail-item__value">${team.termRate}%</div>
+          </div>
+        </div>
+        <div style="margin-top: 12px;">
+          <strong style="font-size: var(--fs-sm); color: var(--text-secondary);">오답 유형 분포</strong>
+          <div class="mini-bar-list" style="margin-top: 8px;">
+            <div class="mini-bar-item">
+              <span class="mini-bar-item__label">구버전 기준</span>
+              <div class="mini-bar-item__track"><div class="mini-bar-item__fill" style="width: ${Math.min(team.oldRate, 100)}%;"></div></div>
+              <span class="mini-bar-item__value">${team.oldRate}%</span>
+            </div>
+            <div class="mini-bar-item">
+              <span class="mini-bar-item__label">비공식·오용어</span>
+              <div class="mini-bar-item__track"><div class="mini-bar-item__fill" style="width: ${Math.min(team.misuseRate, 100)}%;"></div></div>
+              <span class="mini-bar-item__value">${team.misuseRate}%</span>
+            </div>
+            <div class="mini-bar-item">
+              <span class="mini-bar-item__label">유사 기능 혼동</span>
+              <div class="mini-bar-item__track"><div class="mini-bar-item__fill" style="width: ${Math.min(team.confusionRate, 100)}%;"></div></div>
+              <span class="mini-bar-item__value">${team.confusionRate}%</span>
+            </div>
+          </div>
+        </div>
+      `;
+      document.getElementById('team-detail-content').innerHTML = html;
+      document.getElementById('team-detail-section').style.display = 'block';
+    }
+
+    function renderSyncIssueDetail() {
+      if (!analysisData) return;
+
+      const tbody = document.getElementById('issues-body');
+      const issues = getTopSyncIssues();
+      const html = issues.map(issue => {
+        const affectedTeams = Array.from(issue.affectedTeams).slice(0, 3).join(', ');
+        return `<tr>
+          <td><strong>${issue.qid}</strong></td>
+          <td>${issue.domain}</td>
+          <td><span class="badge badge--info">${issue.dominantTag || '기타'}</span></td>
+          <td>${issue.wrongRate}%</td>
+          <td>${issue.sameWrongRate}%</td>
+          <td style="font-size: var(--fs-xs);">${affectedTeams}</td>
+          <td><button class="btn btn-sm" onclick="showQuestionDetail('${issue.qid}')">상세</button></td>
+        </tr>`;
+      }).join('');
+      tbody.innerHTML = html || '<tr><td colspan="7" style="text-align: center;">이슈가 없습니다.</td></tr>';
+
+      document.getElementById('empty-state-sync-issues').style.display = 'none';
+    }
+
+    function updateIssueFilters() {
+      // 필터 값 수집
+      state.issueFilters.category = document.getElementById('issue-filter-category').value;
+      state.issueFilters.axis = document.getElementById('issue-filter-axis').value;
+      state.issueFilters.tier = document.getElementById('issue-filter-tier').value;
+      renderSyncIssueDetail();
+    }
+
+    function getTopSyncIssues() {
+      const issues = [];
+
+      Object.entries(analysisData.questionStats).forEach(([qid, q]) => {
+        if (!q.responses || q.responses.length === 0) return;
+
+        // 카테고리 필터
+        if (state.issueFilters.category && q.domain !== state.issueFilters.category) return;
+        // 축 필터
+        if (state.issueFilters.axis && String(q.axis) !== state.issueFilters.axis) return;
+
+        const wrongRate = Math.round(((q.total - q.correct) / q.total) * 100);
+        const wrongResponses = q.responses.filter(r => r.selected !== r.correct);
+
+        if (wrongResponses.length === 0) return;
+
+        // 가장 많이 선택된 오답 보기 찾기
+        const wrongSelection = {};
+        wrongResponses.forEach(r => {
+          const key = r.selected;
+          wrongSelection[key] = (wrongSelection[key] || 0) + 1;
+        });
+        const dominantWrongIdx = Object.entries(wrongSelection).sort((a, b) => b[1] - a[1])[0];
+        const sameWrongRate = dominantWrongIdx ? Math.round((dominantWrongIdx[1] / wrongResponses.length) * 100) : 0;
+        const dominantTag = dominantWrongIdx && q.tags[parseInt(dominantWrongIdx[0])] ? q.tags[parseInt(dominantWrongIdx[0])] : '기타';
+
+        // 영향 팀 찾기
+        const affectedTeams = new Set();
+        wrongResponses.forEach(r => {
+          const emp = analysisData.resultsByEmail[r.email];
+          if (emp && emp.team) affectedTeams.add(emp.team);
+        });
+
+        issues.push({
+          qid: q.qid,
+          domain: q.domain,
+          wrongRate,
+          wrongCount: wrongResponses.length,
+          sameWrongRate,
+          dominantTag,
+          affectedTeams
+        });
+      });
+
+      return issues.sort((a, b) => b.wrongCount - a.wrongCount);
+    }
+
+    function showQuestionDetail(qid) {
+      alert(`문항 ${qid}의 상세 분석\n(현재 프로토타입에서는 기본 정보만 표시):`);
+    }
+
+    init();
+  </script>
+</body>
+</html>

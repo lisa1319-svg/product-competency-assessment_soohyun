@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>응시자 관리</title>
+<link rel="stylesheet" href="/shared/admin-design.css">
+<style>
+  .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 18px; }
+  .toolbar .field { display: flex; flex-direction: column; gap: 6px; min-width: 160px; }
+  .toolbar .field.search { flex: 1; min-width: 220px; }
+  .toolbar .field label { font-size: var(--fs-xs); color: var(--text-tertiary); font-weight: 600; }
+  .toolbar .input, .toolbar .select { padding: 8px 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); font-size: var(--fs-sm); background: var(--surface); color: var(--text-primary); }
+</style>
+</head>
+<body>
+<div class="shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <header class="topbar" id="topbar"></header>
+  <main class="main">
+    <div class="content">
+      <div class="page-head">
+        <div>
+          <h1 class="page-title">응시자 관리</h1>
+          <p class="page-desc" id="page-desc">재시험 대상 사유와 학습자료 열람 여부, 응시 일정을 검색과 필터로 관리합니다.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2 id="panel-title">재시험 대상자 <span id="result-count" style="font-weight:400; color:var(--text-tertiary); font-size:var(--fs-sm);"></span></h2>
+          <button type="button" class="btn btn-outline" id="btn-reset-filters">필터 초기화</button>
+        </div>
+        <div class="panel-body">
+          <div class="toolbar" aria-label="재시험 관리 검색 및 필터">
+            <div class="field search">
+              <label for="retakeSearch">검색</label>
+              <input id="retakeSearch" class="input" type="search" placeholder="이름, 팀, 사유, 학습자료 검색">
+            </div>
+            <div class="field">
+              <label for="retakeTeamFilter">팀</label>
+              <select id="retakeTeamFilter" class="select"><option value="전체">전체</option></select>
+            </div>
+            <div class="field">
+              <label for="retakeReasonFilter">대상 사유</label>
+              <select id="retakeReasonFilter" class="select">
+                <option value="전체">전체</option>
+                <option value="Tier 0 과락">Tier 0 과락</option>
+                <option value="위험군 플래그">위험군 플래그</option>
+                <option value="합격선 미달">합격선 미달</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="retakeMaterialFilter">학습자료 열람</label>
+              <select id="retakeMaterialFilter" class="select">
+                <option value="전체">전체</option>
+                <option value="열람">열람</option>
+                <option value="미열람">미열람</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="retakeReminderFilter">독려 상태</label>
+              <select id="retakeReminderFilter" class="select">
+                <option value="전체">전체</option>
+                <option value="독려 완료">독려 완료</option>
+                <option value="대기">대기</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="panel-body--flush">
+          <div id="retake-table-container">
+            <div class="empty-state"><div class="empty-state__icon"></div><div class="empty-state__text">데이터를 불러오는 중입니다...</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 전 회차 재시험 이력 -->
+      <div class="panel">
+        <div class="panel-head"><h2>전 회차 재시험 이력</h2></div>
+        <div class="panel-body--flush">
+          <div id="history-container">
+            <div class="empty-state"><div class="empty-state__icon"></div><div class="empty-state__text">아직 다른 회차 데이터가 없습니다.</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/shared/config.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/shared/nav.js"></script>
+<script>
+(async () => {
+  const auth = await AUTH.requirePage({ admin: true });
+  if (!auth) return;
+
+  const sb = AUTH.sb;
+
+  const MATERIALS = [
+    { key: 'study', name: '학습 자료', domains: ['전체'] },
+    { key: 'v2', name: '용어집', domains: ['기본 IT 용어'] },
+    { key: 'guide', name: '가이드', domains: ['전체'] },
+    { key: 'pos', name: 'POS 자동연동 사용 설명서', domains: ['POS 자동연동'] },
+  ];
+  function materialFor(domain) {
+    return MATERIALS.find(m => m.domains.includes(domain)) || MATERIALS.find(m => m.key === 'study');
+  }
+
+  // 회차 정보 조회
+  const { data: roundsData } = await sb.from('exam_rounds').select('id,label,active,closes_at').order('created_at', { ascending: false });
+  const rounds = roundsData || [];
+  const params = new URLSearchParams(location.search);
+  let activeRoundId = params.get('round');
+  if (!activeRoundId) {
+    const a = rounds.find(r => r.active);
+    activeRoundId = a ? a.id : (rounds[0] && rounds[0].id);
+  }
+
+  renderAdminShell({
+    role: auth.role,
+    current: '/admin/retake.html',
+    email: auth.email,
+    rounds: rounds,
+    activeRoundId: activeRoundId,
+    examType: '재시험',
+    showExamTypeToggle: true,
+    onRoundChange: (id) => { location.href = location.pathname + '?round=' + id },
+    onExamTypeChange: (type) => {
+      if (type === '본시험') {
+        location.href = '/admin/person.html?round=' + activeRoundId + '&examType=본시험';
+      }
+    }
+  });
+
+  if (!activeRoundId) {
+    document.getElementById('retake-table-container').innerHTML = '<div class="empty-state"><div class="empty-state__icon"></div><div class="empty-state__text">현재 진행 중인 회차가 없습니다.</div></div>';
+    return;
+  }
+
+  const activeRound = rounds.find(r => r.id === activeRoundId);
+
+  // 이번 회차 응시 데이터 조회 (최종 답 기준)
+  const { data: attempts } = await sb
+    .from('exam_attempts')
+    .select('id,user_email,score,passed,answers,is_retake,submitted_at,created_at')
+    .eq('round_id', activeRoundId)
+    .not('submitted_at', 'is', null);
+
+  const latestByEmail = { false: {}, true: {} };
+  (attempts || []).forEach(a => {
+    const bucket = latestByEmail[a.is_retake ? 'true' : 'false'];
+    if (!bucket[a.user_email] || new Date(a.created_at) > new Date(bucket[a.user_email].created_at)) {
+      bucket[a.user_email] = a;
+    }
+  });
+  const originalAttempts = Object.values(latestByEmail['false']);
+  const retakeAttemptMap = latestByEmail['true'];
+
+  // 재시험 대상 (1차 불합격자)
+  const retakeTargets = originalAttempts.filter(a => !a.passed);
+
+  const { data: employees } = await sb.from('employees').select('email,name,team');
+  const empMap = {};
+  (employees || []).forEach(e => { empMap[e.email] = e; });
+
+  const { data: questions } = await sb.from('questions').select('id,domain,tier,options,correct_index,option_tags');
+  const qMap = {};
+  (questions || []).forEach(q => { qMap[q.id] = q; });
+  const tier0Questions = (questions || []).filter(q => q.tier === 0);
+
+  const { data: settingsRows } = await sb.from('app_settings').select('key,value');
+  const settings = {};
+  (settingsRows || []).forEach(s => { settings[s.key] = s.value; });
+  const riskThreshold = settings.policy_risk_wrong_rate?.value || 40;
+
+  const { data: retakeStatuses } = await sb.from('retake_status').select('email,status').eq('round_id', activeRoundId);
+  const statusMap = {};
+  (retakeStatuses || []).forEach(s => { statusMap[s.email] = s.status; });
+
+  const { data: materialViews } = await sb.from('material_views').select('user_email,page').in('user_email', retakeTargets.map(a => a.user_email));
+  const viewsByEmail = {};
+  (materialViews || []).forEach(v => {
+    if (!viewsByEmail[v.user_email]) viewsByEmail[v.user_email] = new Set();
+    viewsByEmail[v.user_email].add(v.page);
+  });
+
+  function getWrongRate(attempt) {
+    if (!attempt.answers) return 0;
+    const answers = typeof attempt.answers === 'string' ? JSON.parse(attempt.answers) : attempt.answers;
+    let wrong = 0, total = 0;
+    for (const qid in answers) {
+      const a = answers[qid];
+      if (a && a.correct !== undefined) { total++; if (!a.correct) wrong++; }
+    }
+    return total > 0 ? (wrong / total * 100) : 0;
+  }
+
+  function getTier0Fail(attempt) {
+    if (!attempt.answers || tier0Questions.length === 0) return false;
+    const answers = typeof attempt.answers === 'string' ? JSON.parse(attempt.answers) : attempt.answers;
+    const tier0Answers = tier0Questions.map(q => answers[q.id]).filter(Boolean);
+    if (tier0Answers.length === 0) return false;
+    const correct = tier0Answers.filter(a => a.correct).length;
+    return (correct / tier0Answers.length) < 0.9;
+  }
+
+  function getWeakDomain(attempt) {
+    if (!attempt.answers) return null;
+    const answers = typeof attempt.answers === 'string' ? JSON.parse(attempt.answers) : attempt.answers;
+    const domainWrong = {};
+    for (const qid in answers) {
+      const ans = answers[qid];
+      const q = qMap[qid];
+      if (!q || ans.correct) continue;
+      domainWrong[q.domain] = (domainWrong[q.domain] || 0) + 1;
+    }
+    const entries = Object.entries(domainWrong);
+    if (entries.length === 0) return null;
+    return entries.sort((a, b) => b[1] - a[1])[0][0];
+  }
+
+  function getReason(attempt) {
+    if (getTier0Fail(attempt)) return 'Tier 0 과락';
+    if (getWrongRate(attempt) >= riskThreshold) return '위험군 플래그';
+    return '합격선 미달';
+  }
+
+  // 재시험 일정: 본시험 마감일 다음날 ~ +5일 (회차별 단일 창구)
+  let scheduleLabel = '미정';
+  if (activeRound?.closes_at) {
+    const start = new Date(activeRound.closes_at);
+    start.setDate(start.getDate() + 1);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 4);
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    scheduleLabel = `${fmt(start)} ~ ${fmt(end)}`;
+  }
+
+  // 행 데이터 구성
+  const rows = retakeTargets.map(orig => {
+    const emp = empMap[orig.user_email] || {};
+    const retake = retakeAttemptMap[orig.user_email];
+    const weakDomain = getWeakDomain(orig);
+    const material = materialFor(weakDomain);
+    const viewed = weakDomain ? (viewsByEmail[orig.user_email]?.has(material.key) || false) : (viewsByEmail[orig.user_email]?.size > 0 || false);
+    return {
+      email: orig.user_email,
+      name: emp.name || orig.user_email,
+      team: emp.team || '—',
+      reason: getReason(orig),
+      originalScore: Math.round(orig.score || 0),
+      retakeScore: retake ? Math.round(retake.score || 0) : null,
+      materialName: material.name,
+      viewed,
+      schedule: scheduleLabel,
+      completed: !!retake,
+      reminderStatus: statusMap[orig.user_email] || 'notice_needed'
+    };
+  });
+
+  // 필터 옵션(팀) 채우기
+  const teamFilterSelect = document.getElementById('retakeTeamFilter');
+  const teams = ['전체', ...new Set(rows.map(r => r.team).filter(t => t !== '—'))];
+  teamFilterSelect.innerHTML = teams.map(t => `<option value="${t}">${t}</option>`).join('');
+
+  const state = { search: '', team: '전체', reason: '전체', material: '전체', reminder: '전체' };
+
+  function getFilteredRows() {
+    return rows.filter(row => {
+      if (state.team !== '전체' && row.team !== state.team) return false;
+      if (state.reason !== '전체' && row.reason !== state.reason) return false;
+      if (state.material !== '전체' && (row.viewed ? '열람' : '미열람') !== state.material) return false;
+      const reminderLabel = (row.reminderStatus === 'notice_sent' || row.reminderStatus === 'in_progress' || row.reminderStatus === 'completed') ? '독려 완료' : '대기';
+      if (state.reminder !== '전체' && reminderLabel !== state.reminder) return false;
+      const needle = state.search.trim().toLowerCase();
+      if (needle) {
+        const haystack = [row.name, row.team, row.reason, row.materialName].join(' ').toLowerCase();
+        if (!haystack.includes(needle)) return false;
+      }
+      return true;
+    });
+  }
+
+  function badge(text, tone) {
+    const toneMap = { success: 'badge--success', danger: 'badge--danger', warning: 'badge--warning', info: 'badge--info', neutral: 'badge--neutral' };
+    return `<span class="badge ${toneMap[tone] || 'badge--neutral'}">${text}</span>`;
+  }
+
+  function renderTable() {
+    const filtered = getFilteredRows();
+    document.getElementById('result-count').textContent = `검색 결과 ${filtered.length}명`;
+
+    if (rows.length === 0) {
+      document.getElementById('retake-table-container').innerHTML = '<div class="empty-state"><div class="empty-state__icon"></div><div class="empty-state__text">재시험 대상자가 없습니다.</div></div>';
+      return;
+    }
+    if (filtered.length === 0) {
+      document.getElementById('retake-table-container').innerHTML = '<div class="empty-state"><div class="empty-state__icon"></div><div class="empty-state__text">조건에 맞는 재시험 대상자가 없습니다. 검색어 또는 필터를 변경해 주세요.</div></div>';
+      return;
+    }
+
+    const tableHtml = `
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>재시험 대상자</th><th>팀</th><th>대상 사유</th><th>본시험 점수</th><th>재시험 점수</th>
+              <th>관련 학습자료</th><th>학습자료 열람 여부</th><th>재시험 일정</th><th>응시 상태</th><th>독려 알림 발송</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filtered.map(row => {
+              const reminderDone = row.reminderStatus === 'notice_sent' || row.reminderStatus === 'in_progress' || row.reminderStatus === 'completed';
+              return `
+                <tr>
+                  <td>${row.name}</td>
+                  <td>${row.team}</td>
+                  <td><span class="badge badge--orange">${row.reason}</span></td>
+                  <td>${row.originalScore}점</td>
+                  <td>${row.completed ? row.retakeScore + '점' : '-'}</td>
+                  <td>${row.materialName}</td>
+                  <td>${row.viewed ? badge('학습자료 열람', 'success') : badge('미열람', 'neutral')}</td>
+                  <td>${row.schedule}</td>
+                  <td>${row.completed ? badge('응시 완료', 'success') : badge('미응시', 'warning')}</td>
+                  <td><button type="button" class="btn btn-primary btn-sm" onclick="sendRetakeNotice('${row.email}', this)" ${reminderDone ? 'disabled' : ''}>${reminderDone ? '완료' : '발송'}</button></td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+    document.getElementById('retake-table-container').innerHTML = tableHtml;
+  }
+
+  document.getElementById('retakeSearch').addEventListener('input', e => { state.search = e.target.value; renderTable(); });
+  document.getElementById('retakeTeamFilter').addEventListener('change', e => { state.team = e.target.value; renderTable(); });
+  document.getElementById('retakeReasonFilter').addEventListener('change', e => { state.reason = e.target.value; renderTable(); });
+  document.getElementById('retakeMaterialFilter').addEventListener('change', e => { state.material = e.target.value; renderTable(); });
+  document.getElementById('retakeReminderFilter').addEventListener('change', e => { state.reminder = e.target.value; renderTable(); });
+  document.getElementById('btn-reset-filters').addEventListener('click', () => {
+    state.search = ''; state.team = '전체'; state.reason = '전체'; state.material = '전체'; state.reminder = '전체';
+    document.getElementById('retakeSearch').value = '';
+    document.getElementById('retakeTeamFilter').value = '전체';
+    document.getElementById('retakeReasonFilter').value = '전체';
+    document.getElementById('retakeMaterialFilter').value = '전체';
+    document.getElementById('retakeReminderFilter').value = '전체';
+    renderTable();
+  });
+
+  renderTable();
+
+  // 재시험 안내 발송 핸들러 (개별)
+  window.sendRetakeNotice = async (email, btnEl) => {
+    try {
+      const { error: upsertError } = await sb.from('retake_status').upsert({
+        round_id: activeRoundId,
+        email: email,
+        status: 'notice_sent'
+      });
+      if (upsertError) throw upsertError;
+
+      await sb.from('admin_audit_log').insert({
+        actor_email: auth.email,
+        action: 'retake.notice_sent',
+        detail: `재시험 대상자 ${email}에게 안내 발송`
+      });
+
+      const row = rows.find(r => r.email === email);
+      if (row) row.reminderStatus = 'notice_sent';
+      btnEl.disabled = true;
+      btnEl.textContent = '완료';
+    } catch (err) {
+      console.error('재시험 안내 발송 실패:', err);
+      alert('발송 실패: ' + err.message);
+    }
+  };
+
+  // 전 회차 재시험 이력 조회 (다른 회차의 is_retake=true 데이터)
+  const { data: allRounds } = await sb.from('exam_rounds').select('id,label').order('created_at', { ascending: false });
+  const otherRounds = (allRounds || []).filter(r => r.id !== activeRoundId);
+
+  function getWeakCategoryFromAnswers(attempt) {
+    const answers = attempt.answers || {};
+    const domains = {};
+    Object.entries(answers).forEach(([qId, ans]) => {
+      if (ans.correct === false && qMap[qId]) {
+        const domain = qMap[qId].domain;
+        domains[domain] = (domains[domain] || 0) + 1;
+      }
+    });
+    if (Object.keys(domains).length === 0) return '—';
+    return Object.entries(domains).sort((a, b) => b[1] - a[1])[0][0];
+  }
+
+  if (otherRounds.length === 0) {
+    document.getElementById('history-container').innerHTML = '<div class="empty-state"><div class="empty-state__icon"></div><div class="empty-state__text">아직 다른 회차 데이터가 없습니다.</div></div>';
+  } else {
+    const { data: otherRetakes } = await sb
+      .from('exam_attempts')
+      .select('id,user_email,round_id,score,passed,answers,is_retake,submitted_at')
+      .in('round_id', otherRounds.map(r => r.id))
+      .eq('is_retake', true)
+      .not('submitted_at', 'is', null);
+
+    if (!otherRetakes || otherRetakes.length === 0) {
+      document.getElementById('history-container').innerHTML = '<div class="empty-state"><div class="empty-state__icon"></div><div class="empty-state__text">아직 다른 회차 데이터가 없습니다.</div></div>';
+    } else {
+      const historyRows = [];
+      for (const retake of otherRetakes) {
+        const roundLabel = allRounds.find(r => r.id === retake.round_id)?.label;
+        const { data: firstAttempts } = await sb
+          .from('exam_attempts')
+          .select('score')
+          .eq('round_id', retake.round_id)
+          .eq('user_email', retake.user_email)
+          .eq('is_retake', false)
+          .not('submitted_at', 'is', null)
+          .order('submitted_at', { ascending: false })
+          .limit(1);
+
+        const firstScore = firstAttempts?.[0]?.score || null;
+        const improvement = firstScore !== null ? Math.round(retake.score - firstScore) : null;
+        const weakCat = getWeakCategoryFromAnswers(retake);
+
+        const improvementBadge = improvement !== null
+          ? (improvement >= 0 ? badge(`+${improvement}`, 'success') : badge(`${improvement}`, 'danger'))
+          : '—';
+        const finalBadge = retake.passed ? badge('최종 합격', 'success') : badge('재불합격', 'danger');
+
+        historyRows.push({
+          round: roundLabel,
+          user: empMap[retake.user_email]?.name || retake.user_email,
+          team: empMap[retake.user_email]?.team || '—',
+          firstScore: firstScore !== null ? Math.round(firstScore) : '—',
+          retakeScore: Math.round(retake.score),
+          improvement: improvementBadge,
+          weakCat: weakCat,
+          final: finalBadge
+        });
+      }
+
+      if (historyRows.length === 0) {
+        document.getElementById('history-container').innerHTML = '<div class="empty-state"><div class="empty-state__icon"></div><div class="empty-state__text">아직 다른 회차 데이터가 없습니다.</div></div>';
+      } else {
+        const historyHtml = `
+          <div class="table-wrap"> <table class="data-table"> <thead> <tr> <th>회차</th> <th>대상자</th> <th>팀</th> <th>1차 점수</th> <th>재시험 점수</th> <th>개선폭</th> <th>취약 영역</th> <th>최종 결과</th> </tr> </thead> <tbody> ${historyRows.map(r => `
+                  <tr> <td>${r.round}</td> <td>${r.user}</td> <td>${r.team}</td> <td>${r.firstScore}</td> <td>${r.retakeScore}</td> <td>${r.improvement}</td> <td>${r.weakCat}</td> <td>${r.final}</td> </tr> `).join('')}
+              </tbody> </table> </div> `;
+        document.getElementById('history-container').innerHTML = historyHtml;
+      }
+    }
+  }
+})();
+</script>
+</body>
+</html>

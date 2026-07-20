@@ -1,0 +1,857 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>영역별 결과 요약 - t'order 역량평가 관리</title>
+  <link rel="stylesheet" href="/shared/admin-design.css">
+  <style>
+    .pentagon-chart {
+      width: 100%;
+      max-width: 420px;
+      height: auto;
+      display: block;
+      margin: 0 auto;
+    }
+    .axis-label {
+      fill: #4c5665;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .radial-label {
+      fill: #657386;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .axis-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .axis-item {
+      background: var(--surface-sunken);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      text-align: center;
+    }
+    .axis-item__label {
+      font-size: var(--fs-xs);
+      color: var(--text-tertiary);
+      margin-bottom: 4px;
+    }
+    .axis-item__value {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+    .metric-card-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .axis-hint-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .axis-hint-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      background: var(--surface-sunken);
+      border-radius: var(--radius-md);
+      font-size: var(--fs-sm);
+    }
+    .axis-hint-label {
+      flex: 0 0 100px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .axis-hint-bar {
+      flex: 1;
+      height: 6px;
+      background: var(--border-subtle);
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+    .axis-hint-bar__fill {
+      height: 100%;
+      background: #246FF4;
+      border-radius: 3px;
+    }
+    .axis-hint-score {
+      flex: 0 0 40px;
+      text-align: right;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .axis-hint-note {
+      flex: 0 0 120px;
+      font-size: var(--fs-xs);
+      color: var(--text-tertiary);
+      text-align: right;
+    }
+    .compare-chart-wrap {
+      position: relative;
+      height: 260px;
+    }
+    .pill-matrix {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .pill-matrix-item {
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      background: var(--surface);
+      min-height: 92px;
+      box-shadow: var(--shadow-panel);
+    }
+    .pill-matrix-item strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 20px;
+      color: var(--text-primary);
+    }
+    .pill-matrix-item p {
+      margin: 6px 0 0;
+      font-size: var(--fs-xs);
+      color: var(--text-tertiary);
+    }
+    .vulnerability-table {
+      font-size: var(--fs-sm);
+    }
+    .vulnerability-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+    }
+    .vulnerability-table td:first-child {
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+    .vulnerability-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav class="sidebar" id="sidebar"></nav>
+    <header class="topbar" id="topbar"></header>
+    <main class="main">
+      <div class="content">
+        <div class="page-head">
+          <div>
+            <h1 class="page-title">영역별 결과 요약</h1>
+            <p class="page-desc">카테고리와 역량축별 평가 결과를 분석합니다.</p>
+          </div>
+        </div>
+
+        <div id="noDataState" class="empty-state" style="display:none;margin:40px 0;">
+          <div class="empty-state__icon"></div>
+          <div>아직 응시 데이터가 없습니다.</div>
+        </div>
+
+        <div id="dataSection" style="display:none;">
+          <!-- 역량축 오각형 차트 + 메트릭 카드 (본시험만) -->
+          <div class="panel" id="pentagonSection">
+            <div class="panel-head">
+              <div>
+                <h2 id="pentagonSectionTitle">5대 역량축 종합 평가</h2>
+                <p id="pentagonSectionDesc" class="page-desc" style="margin-top:4px;"></p>
+              </div>
+            </div>
+            <div class="panel-body" style="display:flex;gap:28px;">
+              <div style="flex:0 0 420px;display:flex;flex-direction:column;align-items:center;">
+                <div id="pentagonChartContainer"></div>
+                <div class="axis-grid" id="axisValuesGrid"></div>
+              </div>
+              <div style="flex:1;display:flex;flex-direction:column;gap:12px;" id="metricsCardsArea"></div>
+            </div>
+          </div>
+
+          <!-- 유형별 점수와 원인 힌트 (본시험만) -->
+          <div class="panel" id="axisHintsSection">
+            <div class="panel-head">
+              <h2 id="axisHintsSectionTitle">역량축 점수와 강화 방향</h2>
+            </div>
+            <div class="panel-body">
+              <div class="axis-hint-list" id="axisHintsList"></div>
+            </div>
+          </div>
+
+          <!-- 카테고리별 분석 또는 본시험/재시험 비교 -->
+          <div class="chart-row" id="categorySection">
+            <div class="chart-card">
+              <div class="chart-card__title" id="categoryChartTitle">카테고리별 정답률</div>
+              <div class="chart-card__canvas-wrap">
+                <canvas id="chartCategoryRate"></canvas>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="table-wrap" id="categoryTableWrap">
+                  <table class="data-table" id="categoryTable">
+                    <thead id="categoryTableHead"></thead>
+                    <tbody id="categoryTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 출제 범위별 취약 신호 (본시험만) -->
+          <div class="panel" id="vulnerabilitySection">
+            <div class="panel-head">
+              <h2>출제 범위별 취약 신호</h2>
+            </div>
+            <div class="panel-body">
+              <div class="pill-matrix" id="pillMatrix"></div>
+              <div class="table-wrap" style="margin-top:20px;">
+                <table class="data-table vulnerability-table" id="vulnerabilityTable">
+                  <thead>
+                    <tr>
+                      <th>팀</th>
+                      <th>취약 카테고리</th>
+                      <th>취약 문항</th>
+                      <th>낮은 유형</th>
+                      <th>관리 액션</th>
+                    </tr>
+                  </thead>
+                  <tbody id="vulnerabilityTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- 팀별 역량 비교 -->
+          <div class="panel">
+            <div class="panel-head">
+              <h2>팀별 역량 비교</h2>
+            </div>
+            <div class="panel-body">
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr id="teamAxisHeader"></tr>
+                  </thead>
+                  <tbody id="teamAxisBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="/shared/config.js"></script>
+  <script src="/shared/auth.js"></script>
+  <script src="/shared/nav.js"></script>
+  <script>
+    let chartCategoryRate = null;
+    let state = {
+      testType: '본시험',
+      compareChart: null
+    };
+
+    function renderPentagonChart(items) {
+      const center = 220;
+      const radius = 118;
+      const labelRadius = 164;
+      const chartSize = 440;
+      const labelPadding = 104;
+
+      const pointsFor = scale => items.map((item, index) => {
+        const angle = -Math.PI / 2 + index * 2 * Math.PI / items.length;
+        return `${center + Math.cos(angle) * radius * scale},${center + Math.sin(angle) * radius * scale}`;
+      }).join(" ");
+
+      const valuePoints = items.map((item, index) => {
+        const angle = -Math.PI / 2 + index * 2 * Math.PI / items.length;
+        const scale = item.value / 100;
+        return `${center + Math.cos(angle) * radius * scale},${center + Math.sin(angle) * radius * scale}`;
+      }).join(" ");
+
+      const axes = items.map((item, index) => {
+        const angle = -Math.PI / 2 + index * 2 * Math.PI / items.length;
+        const x = center + Math.cos(angle) * radius;
+        const y = center + Math.sin(angle) * radius;
+        const rawLabelX = center + Math.cos(angle) * labelRadius;
+        const ly = center + Math.sin(angle) * labelRadius;
+        const lx = rawLabelX < center ? Math.max(labelPadding, rawLabelX) : Math.min(chartSize - labelPadding, rawLabelX);
+        const anchor = Math.abs(rawLabelX - center) < 8 ? "middle" : rawLabelX > center ? "start" : "end";
+        return `
+          <line x1="${center}" y1="${center}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#d8dee8" stroke-width="1"></line>
+          <circle cx="${(center + Math.cos(angle) * radius * item.value / 100).toFixed(1)}" cy="${(center + Math.sin(angle) * radius * item.value / 100).toFixed(1)}" r="4.5" fill="#273a78"></circle>
+          <text class="axis-label" x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle">${item.label}</text>
+        `;
+      }).join("");
+
+      return `
+        <svg class="pentagon-chart" viewBox="0 0 ${chartSize} 400" role="img" aria-label="5대 역량축 종합 평가">
+          <title>5대 역량축 종합 평가</title>
+          ${[0.2, 0.4, 0.6, 0.8, 1].map(scale => `<polygon points="${pointsFor(scale)}" fill="none" stroke="#e7ebf1" stroke-width="1"></polygon>`).join("")}
+          ${axes}
+          <polygon points="${valuePoints}" fill="rgba(31, 95, 191, 0.16)" stroke="#273a78" stroke-width="4" stroke-linejoin="round"></polygon>
+          <text class="radial-label" x="${center + 8}" y="${center - radius - 2}">100</text>
+          <text class="radial-label" x="${center + 8}" y="${center - radius * 0.8 + 4}">80</text>
+          <text class="radial-label" x="${center + 8}" y="${center - radius * 0.6 + 4}">60</text>
+          <text class="radial-label" x="${center + 8}" y="${center - radius * 0.4 + 4}">40</text>
+          <text class="radial-label" x="${center + 8}" y="${center - radius * 0.2 + 4}">20</text>
+        </svg>
+      `;
+    }
+
+    function getAxisHint(score) {
+      if (score >= 90) return "탁월한 성과";
+      if (score >= 80) return "양호한 수준";
+      if (score >= 75) return "기준 충족";
+      if (score >= 60) return "보강 필요";
+      return "즉시 강화";
+    }
+
+    function updateView() {
+      const pentagonSection = document.getElementById('pentagonSection');
+      const axisHintsSection = document.getElementById('axisHintsSection');
+      const metricsCardsArea = document.getElementById('metricsCardsArea');
+      const vulnerabilitySection = document.getElementById('vulnerabilitySection');
+      const categoryChartTitle = document.getElementById('categoryChartTitle');
+
+      if (state.testType === '본시험') {
+        pentagonSection.style.display = 'block';
+        document.getElementById('pentagonSectionTitle').textContent = '5대 역량축 종합 평가';
+        document.getElementById('pentagonSectionDesc').textContent = '';
+        axisHintsSection.style.display = 'block';
+        document.getElementById('axisHintsSectionTitle').textContent = '역량축 점수와 강화 방향';
+        vulnerabilitySection.style.display = 'block';
+        categoryChartTitle.textContent = '카테고리별 정답률';
+        metricsCardsArea.style.display = 'flex';
+      } else {
+        pentagonSection.style.display = 'block';
+        document.getElementById('pentagonSectionTitle').textContent = '재시험 영역별 개선도';
+        document.getElementById('pentagonSectionDesc').textContent = '본시험에서 취약했던 5대 문항 유형이 재시험에서 어느 정도 회복됐는지 비교합니다.';
+        axisHintsSection.style.display = 'block';
+        document.getElementById('axisHintsSectionTitle').textContent = '유형별 본시험 대비 변화';
+        vulnerabilitySection.style.display = 'none';
+        categoryChartTitle.textContent = '카테고리별 비교 (본시험 vs 재시험)';
+        metricsCardsArea.style.display = 'flex';
+      }
+    }
+
+    (async () => {
+      const auth = await AUTH.requirePage({admin:true});
+      if (!auth) return;
+
+      const { data: roundsData } = await AUTH.sb.from('exam_rounds').select('id,label,active').order('created_at',{ascending:false});
+      const rounds = roundsData || [];
+      const params = new URLSearchParams(location.search);
+      let activeRoundId = params.get('round');
+      if (!activeRoundId) {
+        const a = rounds.find(r=>r.active);
+        activeRoundId = a ? a.id : (rounds[0] && rounds[0].id);
+      }
+      const activeExamType = params.get('examType') === '재시험' ? '재시험' : '본시험';
+      state.testType = activeExamType;
+
+      renderAdminShell({
+        role: auth.role,
+        current: '/admin/analysis-area.html',
+        email: auth.email,
+        rounds,
+        activeRoundId,
+        examType: activeExamType,
+        showExamTypeToggle: true,
+        onRoundChange: (id) => { location.href = location.pathname + '?round=' + id + '&examType=' + encodeURIComponent(state.testType) },
+        onExamTypeChange: (type) => {
+          state.testType = type;
+          location.href = location.pathname + '?round=' + activeRoundId + '&examType=' + encodeURIComponent(type);
+        }
+      });
+
+      if (!activeRoundId) {
+        document.getElementById('noDataState').style.display = 'flex';
+        return;
+      }
+
+      const { data: attemptsData } = await AUTH.sb.from('exam_attempts').select('*').eq('round_id', activeRoundId).eq('is_retake', activeExamType === '재시험');
+      const allAttempts = attemptsData || [];
+
+      const latestAttempts = {};
+      for (const att of allAttempts) {
+        if (!att.submitted_at) continue;
+        const key = att.user_email;
+        if (!latestAttempts[key] || new Date(att.created_at) > new Date(latestAttempts[key].created_at)) {
+          latestAttempts[key] = att;
+        }
+      }
+      const latestAttemptsList = Object.values(latestAttempts);
+
+      if (latestAttemptsList.length === 0) {
+        document.getElementById('noDataState').style.display = 'flex';
+        return;
+      }
+
+      document.getElementById('dataSection').style.display = 'block';
+      updateView();
+
+      const { data: questionsData } = await AUTH.sb.from('questions').select('*');
+      const questions = questionsData || [];
+
+      const { data: employeesData } = await AUTH.sb.from('employees').select('email,team');
+      const employees = employeesData || [];
+      const emailToTeam = {};
+      for (const emp of employees) {
+        emailToTeam[emp.email] = emp.team;
+      }
+
+      // 재시험 모드일 때 본시험(원본) 응시 데이터도 함께 조회 — 축/카테고리 비교에 공통으로 사용
+      let originalList = [];
+      if (state.testType === '재시험') {
+        const { data: origData } = await AUTH.sb.from('exam_attempts').select('*').eq('round_id', activeRoundId).eq('is_retake', false);
+        const latestOriginal = {};
+        for (const att of (origData || [])) {
+          if (!att.submitted_at) continue;
+          const key = att.user_email;
+          if (!latestOriginal[key] || new Date(att.created_at) > new Date(latestOriginal[key].created_at)) {
+            latestOriginal[key] = att;
+          }
+        }
+        originalList = Object.values(latestOriginal);
+      }
+
+      // ============ 본시험/재시험 공통: 역량축 분석 ============
+      const axisStats = {};
+      for (let axis = 1; axis <= 5; axis++) {
+        axisStats[axis] = { correct: 0, total: 0 };
+      }
+
+      for (const q of questions) {
+        if (q.axis && axisStats[q.axis]) {
+          axisStats[q.axis].total++;
+          for (const att of latestAttemptsList) {
+            const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+            if (answers[q.id] && answers[q.id].correct) {
+              axisStats[q.axis].correct++;
+            }
+          }
+        }
+      }
+
+      const axisLabels = ['제품·기능 이해', '기준·용어 싱크', '업데이트 숙지', '누락 방지', '전달 가능성'];
+      const pentagonItems = [];
+      const axisGridHtml = [];
+      const axisSortedByScore = [];
+
+      for (let axis = 1; axis <= 5; axis++) {
+        const total = axisStats[axis].total * latestAttemptsList.length;
+        const rate = total > 0 ? Math.round((axisStats[axis].correct / total) * 100) : 0;
+        pentagonItems.push({ label: axisLabels[axis - 1], value: rate, axis });
+        axisSortedByScore.push({ axis, rate, label: axisLabels[axis - 1] });
+        axisGridHtml.push(`
+          <div class="axis-item">
+            <div class="axis-item__label">${axisLabels[axis - 1]}</div>
+            <div class="axis-item__value">${rate}%</div>
+          </div>
+        `);
+      }
+
+      document.getElementById('pentagonChartContainer').innerHTML = renderPentagonChart(pentagonItems);
+      document.getElementById('axisValuesGrid').innerHTML = axisGridHtml.join('');
+
+      // 본시험 모드: 메트릭 카드 + 축 힌트 렌더링
+      if (state.testType === '본시험') {
+        axisSortedByScore.sort((a, b) => b.rate - a.rate);
+        const strongest = axisSortedByScore[0];
+        const weakest = axisSortedByScore[axisSortedByScore.length - 1];
+        const belowThreshold = axisSortedByScore.filter(a => a.rate < 75).length;
+
+        const metricsCardsArea = document.getElementById('metricsCardsArea');
+        metricsCardsArea.innerHTML = `
+          <div class="metric-card">
+            <div class="metric-label">가장 강한 축</div>
+            <div class="metric-value">${strongest.label}</div>
+            <div class="metric-note">${strongest.rate}점</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">최우선 보강 축</div>
+            <div class="metric-value">${weakest.label}</div>
+            <div class="metric-note">${weakest.rate}점</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">기준선 미달 축</div>
+            <div class="metric-value">${belowThreshold}개</div>
+            <div class="metric-note">75점 미만</div>
+          </div>
+        `;
+
+        // 축 힌트 리스트
+        const hintsList = document.getElementById('axisHintsList');
+        hintsList.innerHTML = axisSortedByScore.map(item => `
+          <div class="axis-hint-item">
+            <div class="axis-hint-label">${item.label}</div>
+            <div class="axis-hint-bar">
+              <div class="axis-hint-bar__fill" style="width:${item.rate}%"></div>
+            </div>
+            <div class="axis-hint-score">${item.rate}%</div>
+            <div class="axis-hint-note">${getAxisHint(item.rate)}</div>
+          </div>
+        `).join('');
+      } else {
+        // 재시험 모드: 본시험 대비 축별 개선도 (originalList 기반 실계산, 가짜 수치 없음)
+        const origAxisStats = {};
+        for (let axis = 1; axis <= 5; axis++) origAxisStats[axis] = { correct: 0, total: 0 };
+        for (const q of questions) {
+          if (q.axis && origAxisStats[q.axis]) {
+            origAxisStats[q.axis].total++;
+            for (const att of originalList) {
+              const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+              if (answers[q.id] && answers[q.id].correct) origAxisStats[q.axis].correct++;
+            }
+          }
+        }
+
+        const improvements = [];
+        for (let axis = 1; axis <= 5; axis++) {
+          const total = origAxisStats[axis].total * originalList.length;
+          const before = total > 0 ? Math.round((origAxisStats[axis].correct / total) * 100) : 0;
+          const after = pentagonItems[axis - 1].value;
+          improvements.push({ axis, label: axisLabels[axis - 1], before, after, delta: after - before });
+        }
+
+        const maxImprove = improvements.reduce((a, b) => (b.delta > a.delta ? b : a), improvements[0]);
+        const belowNow = improvements.filter(i => i.after < 75);
+        const avgDelta = Math.round((improvements.reduce((s, i) => s + i.delta, 0) / improvements.length) * 10) / 10;
+
+        const metricsCardsArea = document.getElementById('metricsCardsArea');
+        metricsCardsArea.innerHTML = `
+          <div class="metric-card">
+            <div class="metric-label">최대 개선 축</div>
+            <div class="metric-value">${maxImprove.label}</div>
+            <div class="metric-note">${maxImprove.delta >= 0 ? '+' : ''}${maxImprove.delta}점</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">잔여 미달 축</div>
+            <div class="metric-value">${belowNow.length}개</div>
+            <div class="metric-note">${belowNow.length ? belowNow.map(i => i.label).join(', ') : '없음 (전 축 75점 이상)'}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">평균 개선폭</div>
+            <div class="metric-value">${avgDelta >= 0 ? '+' : ''}${avgDelta}점</div>
+            <div class="metric-note">5대 문항 유형 기준</div>
+          </div>
+        `;
+
+        const hintsList = document.getElementById('axisHintsList');
+        hintsList.innerHTML = improvements.map(item => {
+          const barColor = item.after >= 75 ? '#246FF4' : '#E20000';
+          const note = item.delta > 0
+            ? `오답 감소 · +${item.delta}점`
+            : item.delta < 0
+              ? `오답 증가 · ${item.delta}점`
+              : '변화 없음';
+          return `
+            <div class="axis-hint-item">
+              <div class="axis-hint-label">${item.label}</div>
+              <div style="flex:1;">
+                <div style="font-size:var(--fs-xs); color:var(--text-tertiary); margin-bottom:2px;">${item.before}점 → ${item.after}점</div>
+                <div class="axis-hint-bar">
+                  <div class="axis-hint-bar__fill" style="width:${item.after}%; background:${barColor};"></div>
+                </div>
+              </div>
+              <div class="axis-hint-note">${note}</div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // ============ 카테고리 분석 ============
+      const categoryStats = {};
+      for (const q of questions) {
+        if (!categoryStats[q.domain]) {
+          categoryStats[q.domain] = { correct: 0, total: 0, peopleWrong: new Set(), peopleRetake: new Set() };
+        }
+        categoryStats[q.domain].total++;
+
+        for (const att of latestAttemptsList) {
+          const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+          if (answers[q.id]) {
+            if (answers[q.id].correct) {
+              categoryStats[q.domain].correct++;
+            } else {
+              categoryStats[q.domain].peopleWrong.add(att.user_email);
+            }
+            if (!att.passed) {
+              categoryStats[q.domain].peopleRetake.add(att.user_email);
+            }
+          }
+        }
+      }
+
+      const categoryLabels = Object.keys(categoryStats).sort();
+
+      // 본시험 모드: 카테고리별 단일 차트 + 테이블
+      if (state.testType === '본시험') {
+        const categoryRates = categoryLabels.map(c => {
+          const total = categoryStats[c].total * latestAttemptsList.length;
+          return total > 0 ? Math.round((categoryStats[c].correct / total) * 100) : 0;
+        });
+
+        if (chartCategoryRate) chartCategoryRate.destroy();
+        const ctxCat = document.getElementById('chartCategoryRate').getContext('2d');
+        chartCategoryRate = new Chart(ctxCat, {
+          type: 'bar',
+          data: {
+            labels: categoryLabels,
+            datasets: [{
+              label: '정답률 (%)',
+              data: categoryRates,
+              backgroundColor: '#246FF4',
+              borderRadius: 6
+            }]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { x: { max: 100, ticks: { callback: v => v + '%' } } }
+          }
+        });
+
+        const thead = document.getElementById('categoryTableHead');
+        const tbody = document.getElementById('categoryTableBody');
+        thead.innerHTML = `
+          <tr>
+            <th>카테고리</th>
+            <th>평균정답률</th>
+            <th>오답인원수</th>
+            <th>재시험연관인원</th>
+          </tr>
+        `;
+        tbody.innerHTML = categoryLabels.map(c => {
+          const total = categoryStats[c].total * latestAttemptsList.length;
+          const rate = total > 0 ? Math.round((categoryStats[c].correct / total) * 100) : 0;
+          return `<tr>
+            <td>${c}</td>
+            <td>${rate}%</td>
+            <td>${categoryStats[c].peopleWrong.size}</td>
+            <td>${categoryStats[c].peopleRetake.size}</td>
+          </tr>`;
+        }).join('');
+      } else {
+        // 재시험 모드: 본시험 vs 재시험 비교 차트 (originalList는 위에서 이미 조회됨)
+
+        const categoryRateOriginal = categoryLabels.map(c => {
+          const total = categoryStats[c].total * originalList.length;
+          const count = originalList.reduce((acc, att) => {
+            const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+            for (const q of questions.filter(q => q.domain === c)) {
+              if (answers[q.id] && answers[q.id].correct) acc++;
+            }
+            return acc;
+          }, 0);
+          return total > 0 ? Math.round((count / total) * 100) : 0;
+        });
+
+        const categoryRateRetake = categoryLabels.map(c => {
+          const total = categoryStats[c].total * latestAttemptsList.length;
+          return total > 0 ? Math.round((categoryStats[c].correct / total) * 100) : 0;
+        });
+
+        if (chartCategoryRate) chartCategoryRate.destroy();
+        const ctxCat = document.getElementById('chartCategoryRate').getContext('2d');
+        chartCategoryRate = new Chart(ctxCat, {
+          type: 'bar',
+          data: {
+            labels: categoryLabels,
+            datasets: [
+              {
+                label: '본시험',
+                data: categoryRateOriginal,
+                backgroundColor: '#B9C3D3',
+                borderRadius: 6
+              },
+              {
+                label: '재시험',
+                data: categoryRateRetake,
+                backgroundColor: '#246FF4',
+                borderRadius: 6
+              }
+            ]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: true } },
+            scales: { x: { max: 100, ticks: { callback: v => v + '%' } } }
+          }
+        });
+
+        const thead = document.getElementById('categoryTableHead');
+        const tbody = document.getElementById('categoryTableBody');
+        thead.innerHTML = `
+          <tr>
+            <th>카테고리</th>
+            <th>본시험정답률</th>
+            <th>재시험정답률</th>
+            <th>개선폭</th>
+          </tr>
+        `;
+        tbody.innerHTML = categoryLabels.map((c, idx) => {
+          const orig = categoryRateOriginal[idx];
+          const retake = categoryRateRetake[idx];
+          const improvement = retake - orig;
+          const improvementStr = improvement >= 0 ? `+${improvement}%` : `${improvement}%`;
+          return `<tr>
+            <td>${c}</td>
+            <td>${orig}%</td>
+            <td>${retake}%</td>
+            <td>${improvementStr}</td>
+          </tr>`;
+        }).join('');
+      }
+
+      // ============ 본시험: 출제 범위별 취약 신호 ============
+      if (state.testType === '본시험') {
+        const { data: appSettingsData } = await AUTH.sb.from('app_settings').select('value').eq('key', 'policy_risk_wrong_rate').maybeSingle();
+        const policy_risk_wrong_rate = appSettingsData?.value?.value || 40;
+
+        const teams = [...new Set(latestAttemptsList.map(a => emailToTeam[a.user_email]).filter(Boolean))];
+
+        // Pill matrix: 카테고리별 요약
+        const pillMatrix = document.getElementById('pillMatrix');
+        pillMatrix.innerHTML = categoryLabels.map(c => {
+          const total = categoryStats[c].total * latestAttemptsList.length;
+          const rate = total > 0 ? Math.round((categoryStats[c].correct / total) * 100) : 0;
+          const wrongCount = categoryStats[c].peopleWrong.size;
+          const passed = latestAttemptsList.filter(att => {
+            const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+            let catCorrect = 0, catTotal = 0;
+            for (const q of questions.filter(q => q.domain === c)) {
+              if (answers[q.id]) {
+                catTotal++;
+                if (answers[q.id].correct) catCorrect++;
+              }
+            }
+            return catTotal > 0 && (catCorrect / catTotal) >= 0.75;
+          }).length;
+
+          const badgeClass = rate >= 75 ? 'badge--success' : 'badge--danger';
+          const badgeText = rate >= 75 ? '합격' : '불합격';
+
+          return `
+            <div class="pill-matrix-item">
+              <span class="badge ${badgeClass}">${badgeText}</span>
+              <strong>${rate}%</strong>
+              <p>문항 ${categoryStats[c].total}개 · 취약 ${wrongCount}개</p>
+            </div>
+          `;
+        }).join('');
+
+        // 취약 신호 테이블
+        const vulnerabilityTableBody = document.getElementById('vulnerabilityTableBody');
+        const teamVulnerabilities = [];
+        for (const team of teams) {
+          let weakCategories = [];
+          let weakQuestions = [];
+          let lowTypes = [];
+
+          for (const c of categoryLabels) {
+            const teamMembers = latestAttemptsList.filter(a => emailToTeam[a.user_email] === team);
+            const teamQuestionsInCat = questions.filter(q => q.domain === c);
+            let teamCorrect = 0, teamTotal = 0;
+            for (const q of teamQuestionsInCat) {
+              for (const att of teamMembers) {
+                const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+                if (answers[q.id]) {
+                  teamTotal++;
+                  if (answers[q.id].correct) teamCorrect++;
+                  else weakQuestions.push(q.qid);
+                }
+              }
+            }
+            if (teamTotal > 0) {
+              const teamRate = Math.round((teamCorrect / teamTotal) * 100);
+              const wrongRate = 100 - teamRate;
+              if (wrongRate >= policy_risk_wrong_rate) {
+                weakCategories.push(c);
+              }
+            }
+          }
+
+          const action = weakCategories.length > 0 && (100 - (categoryStats[weakCategories[0]].correct / (categoryStats[weakCategories[0]].total * latestAttemptsList.length) * 100)) >= policy_risk_wrong_rate
+            ? '즉시 보강 필요'
+            : '모니터링';
+
+          teamVulnerabilities.push({
+            team,
+            weakCategories: weakCategories.slice(0, 2).join(', ') || '-',
+            weakQuestions: [...new Set(weakQuestions)].slice(0, 3).join(', ') || '-',
+            lowTypes: lowTypes.length > 0 ? lowTypes.slice(0, 2).join(', ') : '-',
+            action
+          });
+        }
+
+        vulnerabilityTableBody.innerHTML = teamVulnerabilities.map(tv => `<tr>
+          <td>${tv.team}</td>
+          <td>${tv.weakCategories}</td>
+          <td>${tv.weakQuestions}</td>
+          <td>${tv.lowTypes}</td>
+          <td>${tv.action}</td>
+        </tr>`).join('');
+      }
+
+      // ============ 팀별 역량 비교 ============
+      const teamAxisStats = {};
+      for (const team of [...new Set(latestAttemptsList.map(a => emailToTeam[a.user_email]).filter(Boolean))]) {
+        teamAxisStats[team] = {};
+        for (let axis = 1; axis <= 5; axis++) {
+          teamAxisStats[team][axis] = { correct: 0, total: 0 };
+        }
+      }
+
+      for (const q of questions) {
+        if (q.axis) {
+          for (const att of latestAttemptsList) {
+            const team = emailToTeam[att.user_email];
+            if (!team) continue;
+            teamAxisStats[team][q.axis].total++;
+            const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+            if (answers[q.id] && answers[q.id].correct) {
+              teamAxisStats[team][q.axis].correct++;
+            }
+          }
+        }
+      }
+
+      const headerRow = document.getElementById('teamAxisHeader');
+      headerRow.innerHTML = '<th>팀명</th>' + Object.keys(axisStats).filter(a => axisStats[a].total > 0).map(a => `<th>${axisLabels[a - 1]}</th>`).join('');
+
+      const bodyRow = document.getElementById('teamAxisBody');
+      bodyRow.innerHTML = Object.keys(teamAxisStats).map(team => {
+        let html = `<td><strong>${team}</strong></td>`;
+        for (let axis = 1; axis <= 5; axis++) {
+          if (axisStats[axis] && axisStats[axis].total > 0) {
+            const total = teamAxisStats[team][axis].total;
+            const rate = total > 0 ? Math.round((teamAxisStats[team][axis].correct / total) * 100) : 0;
+            html += `<td>${rate}%</td>`;
+          }
+        }
+        return `<tr>${html}</tr>`;
+      }).join('');
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>t'order 가이드 - POS</title> <!-- Pretendard 웹폰트 -->
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" /> <!-- Tailwind CSS (CDN) -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/shared/config.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/shared/track.js"></script> <style> html, body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  #sidebar {
+    width: 176px;
+    transition: width 0.15s ease;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 30;
+  }
+  #sidebar.collapsed { width: 0; overflow: hidden; border-right: none; }
+  #contentWrap { transition: margin-left 0.15s ease; }
+  .glossary-subnav.hidden { display: none; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen" style="visibility:hidden">
+<script>(function(){ AUTH.requirePage().then(function(u){ if(u){ logMaterialView('pos'); document.body.style.visibility='visible'; var el=document.getElementById('userEmailLabel'); if(el) el.textContent=u.email; var adminLink=document.getElementById('adminEntryLink'); if(adminLink && u.role && u.role!=='test_taker') adminLink.classList.remove('hidden'); } }); })();</script> <!-- 사이드바 (화면에 고정되어 떠 있으며, 본문 레이아웃에 영향을 주지 않습니다) --> <aside id="sidebar" class="bg-white border-r border-slate-200 flex flex-col"> <div class="p-3 flex items-center justify-between gap-2 border-b border-slate-100"> <img src="/shared/logo-dark-text.png" alt="t'order" class="h-4 w-auto"> <button id="sidebarToggle" type="button" class="w-6 h-6 shrink-0 flex items-center justify-center rounded-full text-xs text-slate-400 bg-slate-100 hover:bg-slate-200" aria-label="사이드바 접기">◀</button> </div> <nav class="flex-1 px-2 py-3 space-y-1 text-sm overflow-y-auto"> <div> <div class="flex items-center rounded-xl hover:bg-slate-100"> <a href="exam.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">역량 평가</a> <button type="button" id="evalNavToggle" class="eval-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 메뉴 펼치기">▾</button> </div> <div id="evalSubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs"> <a href="exam.html" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">평가</a> <a href="study.html" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">학습 자료</a> </div> </div> <div> <div class="flex items-center rounded-xl hover:bg-slate-100"> <a href="v2.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">용어집</a> <button type="button" id="glossaryNavToggle" class="glossary-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 카테고리 펼치기">▾</button> </div> <div id="glossarySubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs"> <a href="v2.html?cat=전체" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">전체</a> <a href="v2.html?cat=제품 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">제품 용어</a> <a href="v2.html?cat=추가 기능 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">추가 기능 용어</a> <a href="v2.html?cat=UX 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">UX 용어</a> <a href="v2.html?cat=IT 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">IT 용어</a> <a href="v2.html?cat=종료 및 변경" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">종료 및 변경</a> </div> </div> <a href="notice.html" class="flex items-center justify-between px-2.5 py-2 rounded-xl font-medium text-slate-600 hover:bg-slate-100 whitespace-nowrap">공지 <span id="noticeNavBadge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] align-middle">NEW</span></a> <div> <div class="flex items-center rounded-xl hover:bg-slate-100"> <a href="learn.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">학습글</a> <button type="button" id="learnNavToggle" class="learn-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 카테고리 펼치기">▾</button> </div> <div id="learnSubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs"> <a href="learn.html?cat=전체" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">전체</a> <a href="learn.html?cat=티오더AI" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">티오더AI</a> <a href="learn.html?cat=어드민" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">어드민</a> <a href="learn.html?cat=POS연동" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">POS·외부연동</a> </div> </div> <div> <div class="flex items-center rounded-xl bg-slate-800"> <a href="pos.html" class="flex-1 px-2.5 py-2 font-medium text-white whitespace-nowrap">POS <span id="posNavBadge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] align-middle">NEW</span></a> <button type="button" id="posNavToggle" class="pos-nav-toggle px-2 text-white/70 hover:text-white text-xs" aria-label="하위 지역 펼치기">▴</button> </div> <div id="posSubnav" class="glossary-subnav pl-2.5 space-y-0.5 mt-1 text-xs"> <a data-region="전체" href="pos.html?region=전체" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">전체</a> <a data-region="국내" href="pos.html?region=국내" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">국내</a> <a data-region="해외" href="pos.html?region=해외" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">해외</a> <a data-region="비교" href="pos.html?mode=compare" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">비교</a> </div> </div> <a href="guide.html" class="hidden flex items-center justify-between px-2.5 py-2 rounded-xl font-medium text-slate-600 hover:bg-slate-100 whitespace-nowrap">가이드 <span id="guideNavBadge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] align-middle">NEW</span></a> <a href="/admin/dashboard.html" id="adminEntryLink" class="hidden flex items-center gap-1.5 px-2.5 py-2 rounded-xl font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 whitespace-nowrap"> 관리자 콘솔</a> </nav> <div class="p-3 border-t border-slate-100 text-xs text-slate-400 flex items-center justify-between gap-2"> <span id="userEmailLabel" class="truncate"></span> <button onclick="AUTH.signOut()" class="text-slate-400 hover:text-rose-500 shrink-0">로그아웃</button> </div> </aside> <!-- 접혔을 때 다시 펼치는 버튼 --> <button id="sidebarOpenBtn" type="button" class="hidden fixed top-4 left-4 z-20 w-7 h-7 flex items-center justify-center bg-white border border-slate-200 rounded-full shadow-sm text-slate-400 hover:bg-slate-50 text-xs" aria-label="사이드바 펼치기">▶</button> <button id="scrollTopBtn" type="button" class="hidden fixed bottom-6 right-6 z-20 w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-full shadow-md text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition" aria-label="맨 위로">↑</button> <!-- 본문: 사이드바 상태와 무관하게 항상 화면 중앙에 고정 --> <div id="contentWrap" class="min-h-screen"> <div id="newNoticeBanner" class="hidden max-w-4xl mx-auto pt-3 px-4"> <div class="bg-rose-50 border border-rose-100 text-rose-700 text-sm rounded-xl px-4 py-2 flex items-center justify-between gap-2"> <span> 새 공지가 등록되었습니다. <a href="notice.html" class="underline font-medium">확인하러 가기 →</a></span> <span class="flex items-center gap-2 shrink-0"> <button type="button" id="hideNoticeBannerToday" class="text-[10px] text-rose-300 hover:text-rose-500 underline">더 이상 보지 않기</button> <button type="button" id="dismissNoticeBanner" class="text-rose-400 hover:text-rose-600 px-1">×</button> </span> </div> </div> <!-- 상단: 검색창 --> <header class="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm"> <div class="max-w-4xl mx-auto px-4 py-4"> <input
+          id="searchInput"
+          type="text"
+          placeholder="회사명, POS명으로 검색..."
+          class="w-full px-4 py-2 rounded-full border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400"
+        /> </div> </header> <!-- 본문: 지역별 POS 카드 / 비교 화면 --> <main id="content" class="max-w-4xl mx-auto px-4 py-6 space-y-6"> <p id="statusMessage" class="text-slate-500 text-center py-10">불러오는 중...</p> </main> </div> <script> // 사이드바 접기/펼치기 (localStorage로 상태 기억)
+    const MOBILE_BREAKPOINT = 768;
+    (function () {
+      const sidebar = document.getElementById('sidebar');
+      const openBtn = document.getElementById('sidebarOpenBtn');
+      const contentWrap = document.getElementById('contentWrap');
+      // 화면이 좁을 때(모바일, 작은 팝업 창)는 사이드바가 열리면 본문을 오른쪽으로 밀어서 가려지지 않게 합니다.
+      function applyMobileOffset(collapsed) {
+        const isNarrow = window.innerWidth <= MOBILE_BREAKPOINT;
+        contentWrap.style.marginLeft = (isNarrow && !collapsed) ? '176px' : '';
+      }
+      function applyState(collapsed) {
+        sidebar.classList.toggle('collapsed', collapsed);
+        openBtn.classList.toggle('hidden', !collapsed);
+        applyMobileOffset(collapsed);
+      }
+      applyState(localStorage.getItem('sidebarCollapsed') === 'true');
+      document.getElementById('sidebarToggle').addEventListener('click', () => {
+        localStorage.setItem('sidebarCollapsed', 'true');
+        applyState(true);
+      });
+      openBtn.addEventListener('click', () => {
+        localStorage.setItem('sidebarCollapsed', 'false');
+        applyState(false);
+      });
+      window.addEventListener('resize', () => {
+        applyMobileOffset(sidebar.classList.contains('collapsed'));
+      });
+    })();
+
+    // 맨 위로 스크롤 버튼
+    (function () {
+      const btn = document.getElementById('scrollTopBtn');
+      window.addEventListener('scroll', () => {
+        btn.classList.toggle('hidden', window.scrollY < 300);
+      });
+      btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    })();
+
+    function setupNavToggle(toggleId, subnavId) {
+      const subnav = document.getElementById(subnavId);
+      const btn = document.getElementById(toggleId);
+      btn.addEventListener('click', () => {
+        subnav.classList.toggle('hidden');
+        btn.textContent = subnav.classList.contains('hidden') ? '▾' : '▴';
+      });
+    }
+    setupNavToggle('evalNavToggle', 'evalSubnav');
+    setupNavToggle('glossaryNavToggle', 'glossarySubnav');
+    setupNavToggle('posNavToggle', 'posSubnav');
+    setupNavToggle('learnNavToggle', 'learnSubnav');
+
+    const SHEET_ID = '1MArCmGbnQTSVt2w8FshkKj0WsUN8pFb7PoITb2jrkdc';
+    const SHEET_NAME = 'POS 연동 현황';
+    const REGIONS = ['국내', '해외'];
+
+    const REGION_COLORS = {
+      '국내': 'bg-blue-50 border-blue-100',
+      '해외': 'bg-violet-50 border-violet-100',
+    };
+
+    // 카드/비교표에 보여줄 항목 (라벨, 키)
+    const BADGE_FIELDS = [
+      { label: '티오더에이전트', key: 'torderAgent' },
+      { label: '포스에이전트', key: 'posAgent' },
+      { label: '클라우드 어댑터', key: 'cloudAdapter' },
+      { label: '선결제', key: 'prepay' },
+      { label: '부가세 노출', key: 'vat' },
+      { label: '포스기준모드', key: 'posMode' },
+      { label: '매출 연동', key: 'sales' },
+      { label: '상품등록/수정/삭제', key: 'productSync' },
+      { label: '티오더AI', key: 'torderAi' },
+    ];
+
+    let allData = [];
+    let activeRegion = '전체';
+    let viewMode = 'all'; // 'all' | 'compare'
+    let compareSlots = ['', '', '']; // 비교 모드에서 선택된 POS 이름 (빈 문자열 = 미선택)
+
+    function sheetUrl(sheetName) {
+      return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+    }
+
+    // RFC4180 형식의 CSV를 파싱 (따옴표, 콤마, 줄바꿈 포함 셀 지원)
+    function parseCSV(text) {
+      const rows = [];
+      let row = [];
+      let field = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const next = text[i + 1];
+
+        if (inQuotes) {
+          if (char === '"' && next === '"') {
+            field += '"';
+            i++;
+          } else if (char === '"') {
+            inQuotes = false;
+          } else {
+            field += char;
+          }
+        } else {
+          if (char === '"') {
+            inQuotes = true;
+          } else if (char === ',') {
+            row.push(field);
+            field = '';
+          } else if (char === '\n' || char === '\r') {
+            if (char === '\r' && next === '\n') i++;
+            row.push(field);
+            rows.push(row);
+            row = [];
+            field = '';
+          } else {
+            field += char;
+          }
+        }
+      }
+      if (field.length > 0 || row.length > 0) {
+        row.push(field);
+        rows.push(row);
+      }
+      return rows.filter(r => r.some(cell => cell.trim() !== ''));
+    }
+
+    async function fetchCSVGeneric(sheetName) {
+      const res = await fetch(sheetUrl(sheetName));
+      if (!res.ok) throw new Error(`"${sheetName}" 시트를 불러오지 못했습니다.`);
+      const text = await res.text();
+      return parseCSV(text);
+    }
+
+    async function loadPosData() {
+      const rows = await fetchCSVGeneric(SHEET_NAME);
+      const [, ...body] = rows;
+      return body.map(cols => ({
+        region: (cols[0] || '').trim(),
+        company: (cols[1] || '').trim(),
+        posName: (cols[2] || '').trim(),
+        integrationType: (cols[3] || '').trim(),
+        torderAgent: (cols[4] || '').trim(),
+        posAgent: (cols[5] || '').trim(),
+        cloudAdapter: (cols[6] || '').trim(),
+        prepay: (cols[7] || '').trim(),
+        vat: (cols[8] || '').trim(),
+        posMode: (cols[9] || '').trim(),
+        sales: (cols[10] || '').trim(),
+        productSync: (cols[11] || '').trim(),
+        torderAi: (cols[12] || '').trim(),
+        os: (cols[13] || '').trim(),
+      })).filter(item => item.posName);
+    }
+
+    // 사이드바 하위 지역/비교 목록에서 현재 선택된 항목을 강조합니다.
+    function updatePosSubnavActive() {
+      document.querySelectorAll('#posSubnav a').forEach(a => {
+        const isActive = viewMode === 'compare' ? a.dataset.region === '비교' : a.dataset.region === activeRegion;
+        a.classList.toggle('bg-slate-800', isActive);
+        a.classList.toggle('text-white', isActive);
+        a.classList.toggle('text-slate-500', !isActive);
+        a.classList.toggle('hover:bg-slate-100', !isActive);
+      });
+    }
+
+    document.querySelectorAll('#posSubnav a').forEach(a => {
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (a.dataset.region === '비교') {
+          viewMode = 'compare';
+        } else {
+          viewMode = 'all';
+          activeRegion = a.dataset.region;
+          document.getElementById('searchInput').value = '';
+        }
+        updatePosSubnavActive();
+        toggleSearchVisibility();
+        render();
+        history.replaceState(null, '', a.getAttribute('href'));
+      });
+    });
+
+    function toggleSearchVisibility() {
+      document.getElementById('searchInput').closest('header').style.display = viewMode === 'all' ? '' : 'none';
+    }
+
+    function badgeClass(value) {
+      if (!value || value === '-') return 'bg-slate-100 text-slate-400';
+      if (value.includes('미지원')) return 'bg-slate-100 text-slate-400';
+      if (value.includes('진행중') || value.includes('일부')) return 'bg-amber-50 text-amber-700';
+      if (value.includes('지원')) return 'bg-emerald-50 text-emerald-700';
+      return 'bg-slate-100 text-slate-500';
+    }
+
+    // BADGE_FIELDS(9개)를 3열 x 3행 표로 배치
+    const BADGE_TABLE_COLS = 3;
+
+    function renderPosCard(item) {
+      const rows = [];
+      for (let i = 0; i < BADGE_FIELDS.length; i += BADGE_TABLE_COLS) {
+        rows.push(BADGE_FIELDS.slice(i, i + BADGE_TABLE_COLS));
+      }
+
+      const tableRows = rows.map(rowFields => `
+        <tr> ${rowFields.map(f => `
+            <td class="border border-slate-200 px-2 py-1.5 align-top"> <div class="text-slate-500 font-medium mb-0.5 text-[10px] whitespace-nowrap">${escapeHtml(f.label)}</div> <span class="inline-block px-1.5 py-0.5 rounded ${badgeClass(item[f.key])}">${escapeHtml(item[f.key] || '-')}</span> </td> `).join('')}
+        </tr> `).join('');
+
+      return `
+        <div class="rounded-2xl border border-slate-200 bg-white p-4"> <div class="flex items-baseline justify-between gap-2 mb-1"> <div class="font-bold text-sm">${escapeHtml(item.posName)}</div> <div class="text-xs text-slate-400 shrink-0">${escapeHtml(item.os)}</div> </div> <div class="text-xs text-slate-400 mb-3">${escapeHtml(item.company)} · ${escapeHtml(item.integrationType)}</div> <table class="w-full text-xs border-collapse table-fixed"> <tbody>${tableRows}</tbody> </table> </div> `;
+    }
+
+    function renderAllView() {
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+      const content = document.getElementById('content');
+
+      let regionsToShow = REGIONS;
+      if (!query && activeRegion !== '전체') {
+        regionsToShow = [activeRegion];
+      }
+
+      const sections = regionsToShow.map(region => {
+        let items = allData.filter(item => item.region === region);
+
+        if (query) {
+          items = items.filter(item => item.company.toLowerCase().includes(query) ||
+            item.posName.toLowerCase().includes(query)
+          );
+        }
+
+        if (items.length === 0) return '';
+
+        const colorClass = REGION_COLORS[region] || 'bg-slate-50 border-slate-100';
+        const cards = items.map(renderPosCard).join('');
+
+        return `
+          <section id="section-${region}" class="rounded-2xl border p-5 scroll-mt-32 ${colorClass}"> <h2 class="text-lg font-bold mb-3">${escapeHtml(region)} POS <span class="text-sm font-normal text-slate-400">(${items.length})</span></h2> <div class="grid sm:grid-cols-2 gap-3">${cards}</div> </section> `;
+      }).filter(Boolean);
+
+      content.innerHTML = sections.length
+        ? sections.join('')
+        : `<p class="text-slate-500 text-center py-10">검색 결과가 없습니다.</p>`;
+    }
+
+    // 두 값 리스트를 비교해 서로 다른 값이 있으면 굵은 테두리를 줍니다.
+    function compareCellClass(values) {
+      const differs = new Set(values).size > 1;
+      return differs ? 'border-2 border-slate-800' : 'border border-slate-200';
+    }
+
+    function computeCompareResultHtml() {
+      const selectedItems = compareSlots.map(name => allData.find(i => i.posName === name)).filter(Boolean);
+
+      if (selectedItems.length < 2) {
+        return `<p class="text-slate-400 text-sm py-8 text-center">위에서 비교할 POS를 2개 이상 선택해주세요.</p>`;
+      }
+
+      const infoRows = [
+        { label: '회사', get: i => i.company },
+        { label: '연동방식', get: i => i.integrationType },
+        { label: 'OS', get: i => i.os },
+      ];
+
+      const infoRowsHtml = infoRows.map(r => {
+        const values = selectedItems.map(r.get);
+        const cellClass = compareCellClass(values);
+        return `
+          <tr> <td class="px-3 py-2 text-xs font-medium text-slate-500 bg-slate-50 border border-slate-200 whitespace-nowrap">${escapeHtml(r.label)}</td> ${values.map(v => `<td class="px-3 py-2 ${cellClass} text-xs text-slate-600">${escapeHtml(v)}</td>`).join('')}
+          </tr> `;
+      }).join('');
+
+      const badgeRowsHtml = BADGE_FIELDS.map(f => {
+        const values = selectedItems.map(i => i[f.key] || '-');
+        const cellClass = compareCellClass(values);
+        return `
+          <tr> <td class="px-3 py-2 text-xs font-medium text-slate-500 bg-slate-50 border border-slate-200 whitespace-nowrap">${escapeHtml(f.label)}</td> ${values.map(v => `<td class="px-3 py-2 ${cellClass}"><span class="inline-block px-2 py-0.5 rounded text-xs ${badgeClass(v)}">${escapeHtml(v)}</span></td>`).join('')}
+          </tr> `;
+      }).join('');
+
+      return `
+        <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white"> <table class="w-full text-sm border-collapse"> <thead> <tr> <th class="px-3 py-2 bg-slate-50 border border-slate-200"></th> ${selectedItems.map(i => `<th class="px-3 py-2 border border-slate-200 text-sm font-bold whitespace-nowrap">${escapeHtml(i.posName)}</th>`).join('')}
+              </tr> </thead> <tbody>${infoRowsHtml}${badgeRowsHtml}</tbody> </table> </div> <p class="text-xs text-slate-400 mt-2">굵은 테두리로 표시된 항목은 선택한 POS 사이에 차이가 있는 부분이에요.</p> `;
+    }
+
+    // 포스 비교 모드: 최대 3개까지 POS를 이름으로 검색해서 나란히 비교합니다.
+    // (입력창은 최초 1회만 그리고, 타이핑할 때는 결과 표만 갱신해 포커스가 끊기지 않게 합니다.)
+    function renderCompareView() {
+      const content = document.getElementById('content');
+
+      const pickers = compareSlots.map((val, i) => `
+        <div> <label class="text-xs text-slate-500">비교 ${i + 1}${i === 2 ? ' (선택)' : ''}</label> <input
+            list="posOptionsList"
+            data-slot="${i}"
+            value="${escapeHtml(val)}"
+            placeholder="POS 이름 입력..."
+            class="compare-slot-input w-full px-3 py-2 rounded-full border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+          /> </div> `).join('');
+
+      const datalistOptions = allData.map(item => `<option value="${escapeHtml(item.posName)}"></option>`).join('');
+
+      content.innerHTML = `
+        <div class="rounded-2xl border border-slate-200 bg-white p-4"> <div class="text-sm font-medium text-slate-600 mb-3">비교할 POS 선택</div> <div class="grid sm:grid-cols-3 gap-3">${pickers}</div> <datalist id="posOptionsList">${datalistOptions}</datalist> </div> <div id="compareResult" class="mt-4">${computeCompareResultHtml()}</div> `;
+
+      content.querySelectorAll('.compare-slot-input').forEach(input => {
+        input.addEventListener('input', () => {
+          const idx = Number(input.dataset.slot);
+          compareSlots[idx] = input.value;
+          document.getElementById('compareResult').innerHTML = computeCompareResultHtml();
+        });
+      });
+    }
+
+    function render() {
+      if (viewMode === 'compare') renderCompareView();
+      else renderAllView();
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // 다른 페이지에서도 공통으로 쓰는 "새 소식" 확인 (공지 배너 + 사이드바 NEW 표시)
+    function daysAgoStr(n) {
+      const d = new Date();
+      d.setDate(d.getDate() - n);
+      const pad = x => String(x).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+
+    async function checkFreshness() {
+      try {
+        const rows = await fetchCSVGeneric('공지');
+        const [, ...body] = rows;
+        const parsed = body
+          .map(r => ({ id: Number((r[0] || '').trim()), date: (r[1] || '').trim() }))
+          .filter(n => !isNaN(n.id) && n.id);
+        const latest = parsed.reduce((a, b) => (a && a.id > b.id ? a : b), null);
+        const maxId = latest ? latest.id : 0;
+
+        const seenId = Number(localStorage.getItem('lastSeenNoticeId') || '0');
+        if (maxId > seenId) {
+          document.getElementById('noticeNavBadge').classList.remove('hidden');
+        }
+
+        // 공지가 등록된 당일에는 다시 방문해도(이미 확인했어도) 배너를 계속 띄웁니다.
+        const today = daysAgoStr(0);
+        const dismissedId = localStorage.getItem('dismissedBannerNoticeId');
+        if (latest && latest.date === today && dismissedId !== String(maxId)) {
+          const banner = document.getElementById('newNoticeBanner');
+          banner.classList.remove('hidden');
+          document.getElementById('dismissNoticeBanner').addEventListener('click', () => {
+            banner.classList.add('hidden');
+          });
+          document.getElementById('hideNoticeBannerToday').addEventListener('click', () => {
+            localStorage.setItem('dismissedBannerNoticeId', String(maxId));
+            banner.classList.add('hidden');
+          });
+        }
+      } catch {}
+
+      try {
+        const rows = await fetchCSVGeneric('가이드');
+        const [header, ...body] = rows;
+        const looksLikeGuide = header.some(h => ['상황', '질문'].includes((h || '').trim()));
+        if (looksLikeGuide) {
+          const count = body.filter(r => (r[0] || '').trim()).length;
+          const seenCount = Number(localStorage.getItem('guideRowCount') || '0');
+          if (count > seenCount) document.getElementById('guideNavBadge').classList.remove('hidden');
+        }
+      } catch {}
+    }
+
+    async function init() {
+      const params = new URLSearchParams(location.search);
+      const presetMode = params.get('mode');
+      const presetRegion = params.get('region');
+      if (presetMode === 'compare') {
+        viewMode = 'compare';
+      } else if (presetRegion && (presetRegion === '전체' || REGIONS.includes(presetRegion))) {
+        activeRegion = presetRegion;
+      }
+      updatePosSubnavActive();
+      toggleSearchVisibility();
+
+      try {
+        allData = await loadPosData();
+        localStorage.setItem('posRowCount', String(allData.length));
+        render();
+      } catch (err) {
+        document.getElementById('content').innerHTML = `
+          <p class="text-red-500 text-center py-10"> 데이터를 불러오지 못했습니다.<br /> 구글 시트의 공유 설정이 "링크가 있는 모든 사용자 - 뷰어"로 되어 있는지 확인해주세요.<br /> <span class="text-xs text-slate-400">${escapeHtml(err.message)}</span> </p>`;
+      }
+    }
+
+    document.getElementById('searchInput').addEventListener('input', () => {
+      activeRegion = '전체';
+      updatePosSubnavActive();
+      render();
+    });
+
+    (async () => {
+      await init();
+      checkFreshness();
+    })();
+  </script>
+</body>
+</html>

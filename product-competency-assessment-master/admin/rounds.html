@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>평가 목록</title> <link rel="stylesheet" href="/shared/admin-design.css"> <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script> <script src="/shared/config.js"></script> <script src="/shared/auth.js"></script> <script src="/shared/nav.js"></script>
+</head>
+<body>
+<div class="shell"> <nav class="sidebar" id="sidebar"></nav> <header class="topbar" id="topbar"></header> <main class="main"><div class="content"> <div class="page-head"> <div> <h1 class="page-title">평가 목록</h1> <p class="page-desc">진행 중인 평가와 과거 평가 회차를 관리합니다.</p> </div> <button class="btn btn-primary" onclick="location.href='/admin/round-create.html'" style="height: fit-content;">새 평가 만들기</button> </div> <!-- 상태별 요약 카드 --> <div id="summary-metrics" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px;"></div> <!-- 상태 필터 --> <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 16px;"> <label style="font-size: var(--fs-sm); font-weight: 600; color: var(--text-secondary);">상태 필터:</label> <select id="status-filter" class="input" style="max-width: 160px;" onchange="applyFilter()"> <option value="all">전체</option> <option value="progress">진행중</option> <option value="upcoming">예정</option> <option value="closed">종료</option> </select> </div> <!-- 평가 목록 테이블 --> <div class="table-wrap"> <table class="data-table"> <thead> <tr> <th>평가명</th> <th style="width: 120px;">구분</th> <th>기간</th> <th style="width: 80px;">대상자</th> <th style="width: 140px;">응시율</th> <th style="width: 100px;">상태</th> <th style="width: 200px;">작업</th> </tr> </thead> <tbody id="rounds-table-body"></tbody> </table> </div> <!-- 데이터 없음 --> <div id="empty-state" style="display: none;"> <div class="empty-state"> <div class="empty-state__icon"></div> <p>아직 평가 회차가 없습니다.</p> <button class="btn btn-primary" onclick="location.href='/admin/round-create.html'" style="margin-top: 12px;">새 평가 만들기</button> </div> </div> </div></main>
+</div> <script>
+let authInfo = null;
+let allRounds = [];
+let roundTargets = {};
+let roundAttempts = {};
+let retakeStatusMap = {};
+let examType = '본시험'; // '본시험' or '재시험'
+
+async function init() {
+  authInfo = await AUTH.requirePage({ admin: true });
+  if (!authInfo) return;
+
+  // 사이드바·탑바 렌더링 (exam type toggle 활성화)
+  renderAdminShell({
+    role: authInfo.role,
+    current: '/admin/rounds.html',
+    email: authInfo.email,
+    rounds: [],
+    examType: examType,
+    showExamTypeToggle: true,
+    onExamTypeChange: handleExamTypeChange,
+    sidebarMount: 'sidebar',
+    topbarMount: 'topbar'
+  });
+
+  await loadRounds();
+}
+
+function handleExamTypeChange(type) {
+  examType = type;
+  renderRoundsTable();
+}
+
+async function loadRounds() {
+  try {
+    // 모든 평가 회차 조회
+    const { data: rounds } = await AUTH.sb.from('exam_rounds').select('id,label,active,opens_at,closes_at,created_at').order('created_at', { ascending: false });
+    allRounds = rounds || [];
+
+    // 회차별 대상자 수 조회
+    const { data: targets } = await AUTH.sb.from('exam_round_targets').select('round_id,email');
+    roundTargets = {};
+    (targets || []).forEach(t => {
+      if (!roundTargets[t.round_id]) roundTargets[t.round_id] = [];
+      roundTargets[t.round_id].push(t.email);
+    });
+
+    // 회차별 응시 현황 조회 (본시험/재시험 구분)
+    const { data: attempts } = await AUTH.sb.from('exam_attempts').select('round_id,user_email,is_retake,submitted_at');
+    roundAttempts = {};
+    (attempts || []).forEach(a => {
+      if (!roundAttempts[a.round_id]) roundAttempts[a.round_id] = { exam: [], retake: [] };
+      if (a.submitted_at) {
+        const key = a.is_retake ? 'retake' : 'exam';
+        roundAttempts[a.round_id][key].push(a.user_email);
+      }
+    });
+
+    // 재시험 대상자 현황 조회 (재시험 필터에서 대상자 수 계산용)
+    const { data: retakeStatus } = await AUTH.sb.from('retake_status').select('round_id,email');
+    retakeStatusMap = {};
+    (retakeStatus || []).forEach(r => {
+      if (!retakeStatusMap[r.round_id]) retakeStatusMap[r.round_id] = [];
+      retakeStatusMap[r.round_id].push(r.email);
+    });
+
+    if (allRounds.length === 0) {
+      document.getElementById('empty-state').style.display = 'block';
+      document.querySelector('.table-wrap').style.display = 'none';
+      return;
+    }
+
+    renderSummaryMetrics();
+    renderRoundsTable();
+  } catch (err) {
+    console.error('Load rounds error:', err);
+  }
+}
+
+function applyFilter() {
+  renderRoundsTable();
+}
+
+function getRoundStatus(round) {
+  const now = new Date();
+  const opensAt = round.opens_at ? new Date(round.opens_at) : null;
+  const closesAt = round.closes_at ? new Date(round.closes_at) : null;
+
+  if (closesAt && now > closesAt) {
+    return { key: 'closed', label: '종료', class: 'badge--neutral' };
+  }
+  if (opensAt && now < opensAt) {
+    return { key: 'upcoming', label: '예정', class: 'badge--info' };
+  }
+  return { key: 'progress', label: '진행중', class: 'badge--success' };
+}
+
+function formatDateRange(opensAt, closesAt) {
+  const fmt = (dt) => {
+    if (!dt) return '-';
+    const d = new Date(dt);
+    return d.getFullYear().toString().slice(-2) + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  };
+  return fmt(opensAt) + ' ~ ' + fmt(closesAt);
+}
+
+function renderSummaryMetrics() {
+  const counts = { progress: 0, upcoming: 0, closed: 0 };
+  allRounds.forEach(r => {
+    const status = getRoundStatus(r);
+    counts[status.key]++;
+  });
+
+  // 상단 요약 카드는 exam type과 무관하게 전체 회차 기준 표시
+  const metricsHtml = `
+    <div class="metric-card">
+      <span class="metric-label">진행중</span>
+      <strong style="font-size: 26px; color: var(--text-primary); margin-top: 4px;">${counts.progress}</strong>
+      <div class="metric-note">회차</div>
+    </div>
+    <div class="metric-card">
+      <span class="metric-label">예정</span>
+      <strong style="font-size: 26px; color: var(--text-primary); margin-top: 4px;">${counts.upcoming}</strong>
+      <div class="metric-note">회차</div>
+    </div>
+    <div class="metric-card">
+      <span class="metric-label">종료</span>
+      <strong style="font-size: 26px; color: var(--text-primary); margin-top: 4px;">${counts.closed}</strong>
+      <div class="metric-note">회차</div>
+    </div>
+  `;
+  document.getElementById('summary-metrics').innerHTML = metricsHtml;
+}
+
+// 어댑테이션 노트: 레퍼런스와 달리 우리 시스템은 round 하나에 본시험/재시험이 is_retake 플래그로 공존하므로(별도 엔티티 아님),
+// 본/재시험 토글은 같은 행의 "대상자 수"/"응시율" 메트릭을 바꾸되, 행을 나누지 않음. 구분 배지로 재시험 진행 상태만 표시.
+function renderRoundsTable() {
+  const filterValue = document.getElementById('status-filter').value;
+  const filtered = allRounds.filter(r => {
+    const status = getRoundStatus(r);
+    return filterValue === 'all' || status.key === filterValue;
+  });
+
+  if (filtered.length === 0) {
+    document.getElementById('rounds-table-body').innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px;">해당하는 평가가 없습니다.</td></tr>';
+    return;
+  }
+
+  const tbody = document.getElementById('rounds-table-body');
+  const html = filtered.map(r => {
+    const status = getRoundStatus(r);
+    const attempts = roundAttempts[r.id] || { exam: [], retake: [] };
+    const hasRetakeData = retakeStatusMap[r.id] && retakeStatusMap[r.id].length > 0;
+
+    // 본시험/재시험 기준으로 메트릭 계산
+    let targetCount, submittedCount, responseRate;
+    if (examType === '재시험') {
+      // 재시험 기준: retake_status에 등록된 인원이 대상
+      targetCount = retakeStatusMap[r.id]?.length || 0;
+      submittedCount = attempts.retake.length || 0;
+    } else {
+      // 본시험 기준: exam_round_targets에 등록된 전체 인원
+      targetCount = roundTargets[r.id]?.length || 0;
+      submittedCount = attempts.exam.length || 0;
+    }
+
+    responseRate = targetCount > 0 ? Math.round((submittedCount / targetCount) * 100) : 0;
+
+    // 응시율 색상: 70미만 빨강 / 70~75 주황 / 75이상 파랑
+    let progressBarColor = '#E20000'; // 70미만 빨강
+    if (responseRate >= 75) {
+      progressBarColor = '#246FF4'; // 75이상 파랑
+    } else if (responseRate >= 70) {
+      progressBarColor = '#F97316'; // 70~75 주황
+    }
+
+    // 구분 배지 (본시험/재시험 + 재시험 진행중 표시)
+    let kindBadges = '본시험';
+    if (hasRetakeData) {
+      kindBadges += ' <span class="badge badge--warning" style="margin-left: 6px;">재시험 진행중</span>';
+    }
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(r.label)}</strong></td>
+        <td>${kindBadges}</td>
+        <td style="font-size: var(--fs-sm);">${formatDateRange(r.opens_at, r.closes_at)}</td>
+        <td style="text-align: center; font-weight: 600;">${targetCount}</td>
+        <td>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="flex: 1; height: 6px; background: var(--border-subtle); border-radius: 3px; overflow: hidden;">
+              <div style="height: 100%; background: ${progressBarColor}; width: ${responseRate}%;"></div>
+            </div>
+            <span style="font-size: var(--fs-xs); color: var(--text-tertiary); min-width: 40px; text-align: right;">${responseRate}%</span>
+          </div>
+        </td>
+        <td><span class="badge ${status.class}">${status.label}</span></td>
+        <td>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button class="btn btn-sm btn-outline" onclick="editRound('${r.id}')">수정</button>
+            <button class="btn btn-sm btn-outline" onclick="duplicateRound('${r.id}')">복제</button>
+            <button class="btn btn-sm btn-outline" onclick="toggleActive('${r.id}', ${r.active})">${r.active ? '비활성' : '활성'}</button>
+            <button class="btn btn-sm btn-outline" onclick="viewDashboard('${r.id}')">결과</button>
+          </div>
+        </td>
+      </tr> `;
+  }).join('');
+  tbody.innerHTML = html;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function editRound(roundId) {
+  // 편집 페이지는 아직 구현 안 함, placeholder로 alert
+  alert('평가 편집 기능은 /admin/round-edit.html에서 구현 예정입니다.');
+}
+
+async function duplicateRound(roundId) {
+  try {
+    const round = allRounds.find(r => r.id === roundId);
+    if (!round) return;
+
+    const newLabel = round.label + ' (복제)';
+    const { data: newRound, error } = await AUTH.sb.from('exam_rounds').insert({
+      label: newLabel,
+      active: false,
+      opens_at: round.opens_at,
+      closes_at: round.closes_at
+    }).select().single();
+
+    if (error) throw error;
+
+    // audit_log 기록
+    await AUTH.sb.from('admin_audit_log').insert({
+      actor_email: authInfo.email,
+      action: 'round.duplicate',
+      detail: `"${round.label}" 회차를 "${newLabel}"으로 복제했습니다.`
+    });
+
+    alert('평가 회차가 복제되었습니다. (대상자 및 문항은 다시 배정하세요)');
+    await loadRounds();
+  } catch (err) {
+    console.error('Duplicate round error:', err);
+    alert('복제 중 오류 발생: ' + err.message);
+  }
+}
+
+async function toggleActive(roundId, currentActive) {
+  try {
+    const round = allRounds.find(r => r.id === roundId);
+    if (!round) return;
+
+    const { error } = await AUTH.sb.from('exam_rounds').update({ active: !currentActive }).eq('id', roundId);
+    if (error) throw error;
+
+    // audit_log 기록
+    await AUTH.sb.from('admin_audit_log').insert({
+      actor_email: authInfo.email,
+      action: 'round.toggle_active',
+      detail: `"${round.label}" 회차를 ${!currentActive ? '활성' : '비활성'}화했습니다.`
+    });
+
+    await loadRounds();
+  } catch (err) {
+    console.error('Toggle active error:', err);
+    alert('상태 변경 중 오류 발생: ' + err.message);
+  }
+}
+
+function viewDashboard(roundId) {
+  location.href = '/admin/dashboard.html?round=' + roundId;
+}
+
+init();
+</script>
+</body>
+</html>

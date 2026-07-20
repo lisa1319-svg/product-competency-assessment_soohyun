@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>t'order 역량평가 · 로그인</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="/shared/config.js"></script>
+  <script src="/shared/auth.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Helvetica, Arial, sans-serif; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-50 min-h-screen flex items-center justify-center">
+
+<div class="w-full max-w-sm">
+  <div class="bg-white rounded-lg shadow-lg p-8">
+    <!-- 로고/타이틀 -->
+    <div class="text-center mb-8">
+      <img src="/shared/logo-dark-text.png" alt="t'order" class="h-8 w-auto mx-auto mb-3">
+      <div class="text-lg text-slate-600 font-medium">역량평가 시스템</div>
+    </div>
+
+    <!-- 안내문 -->
+    <div class="mb-8">
+      <p class="text-center text-sm text-slate-600 leading-relaxed">
+        @torder.com 이메일로 로그인하세요.<br>
+        <span class="text-xs text-slate-500">본 시스템은 내부 직원 전용입니다.</span>
+      </p>
+    </div>
+
+    <!-- Google Sign-In 버튼 마운트 지점 -->
+    <div id="g-signin-btn" class="flex justify-center mb-6"></div>
+
+    <!-- 에러 메시지 -->
+    <div id="auth-error" class="text-red-600 text-sm text-center min-h-6"></div>
+
+    <!-- 로딩 상태 -->
+    <div id="loading" class="hidden text-center">
+      <div class="animate-spin inline-block w-4 h-4 border-2 border-slate-300 border-t-slate-900 rounded-full"></div>
+      <p class="text-sm text-slate-600 mt-2">로그인 중...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(async () => {
+  try {
+    // 이미 세션이 있으면 role 조회해서 바로 리다이렉트
+    const { data: { session } } = await AUTH.sb.auth.getSession()
+    if (session) {
+      document.getElementById('loading').classList.remove('hidden')
+      location.href = '/exam.html'
+      return
+    }
+
+    // 세션 없으면 Google Sign-In 버튼 렌더링
+    AUTH.setupGoogleSignIn('g-signin-btn', (errMsg) => {
+      document.getElementById('auth-error').textContent = errMsg
+    })
+  } catch (err) {
+    document.getElementById('auth-error').textContent = '오류 발생: ' + err.message
+  }
+})()
+</script>
+
+</body>
+</html>

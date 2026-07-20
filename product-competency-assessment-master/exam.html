@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>t'order 가이드 - 역량 평가</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/shared/config.js"></script>
+<script src="/shared/auth.js"></script>
+<style>
+  html, body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  #sidebar {
+    width: 176px;
+    transition: width 0.15s ease;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 30;
+  }
+  #sidebar.collapsed { width: 0; overflow: hidden; border-right: none; }
+  #contentWrap { transition: margin-left 0.15s ease; }
+  .glossary-subnav.hidden { display: none; }
+
+  .question-card { background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px; margin-bottom: 14px; }
+  .question-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; font-size: 12px; }
+  .exam-badge { background: #f1f5f9; padding: 3px 9px; border-radius: 999px; color: #64748b; font-weight: 600; }
+  .exam-badge.tier0 { background: #dcfce7; color: #166534; }
+  .exam-badge.tier1 { background: #fef3c7; color: #92400e; }
+  .exam-badge.tier2 { background: #dbeafe; color: #1e40af; }
+  .question-text { font-size: 16px; font-weight: 600; margin-bottom: 16px; line-height: 1.6; color: #0f172a; }
+  .option-group { display: flex; flex-direction: column; gap: 10px; }
+  .exam-option { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 12px; cursor: pointer; transition: all 0.15s; }
+  .exam-option:hover { background: #f8fafc; border-color: #cbd5e1; }
+  .exam-option input[type="radio"] { cursor: pointer; flex-shrink: 0; accent-color: #1e293b; }
+  .exam-option label { flex: 1; cursor: pointer; margin: 0; }
+  .result-score { font-size: 48px; font-weight: 800; color: #0f172a; }
+  .result-status.passed { color: #16a34a; }
+  .result-status.failed { color: #dc2626; }
+  .result-detail-item { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+  .result-detail-item:last-child { border: none; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen" style="visibility:hidden">
+<script>(function(){ AUTH.requirePage().then(function(u){ if(u){ window.__currentUser = u; document.body.style.visibility='visible'; var el=document.getElementById('userEmailLabel'); if(el) el.textContent=u.email; var adminLink=document.getElementById('adminEntryLink'); if(adminLink && u.role && u.role!=='test_taker') adminLink.classList.remove('hidden'); window.__examInit && window.__examInit(); } }); })();</script>
+
+<!-- 사이드바 -->
+<aside id="sidebar" class="bg-white border-r border-slate-200 flex flex-col">
+  <div class="p-3 flex items-center justify-between gap-2 border-b border-slate-100">
+    <img src="/shared/logo-dark-text.png" alt="t'order" class="h-4 w-auto">
+    <button id="sidebarToggle" type="button" class="w-6 h-6 shrink-0 flex items-center justify-center rounded-full text-xs text-slate-400 bg-slate-100 hover:bg-slate-200" aria-label="사이드바 접기">◀</button>
+  </div>
+  <nav class="flex-1 px-2 py-3 space-y-1 text-sm overflow-y-auto">
+    <div>
+      <div class="flex items-center rounded-xl bg-slate-800">
+        <a href="exam.html" class="flex-1 px-2.5 py-2 font-medium text-white whitespace-nowrap">역량 평가</a>
+        <button type="button" id="evalNavToggle" class="eval-nav-toggle px-2 text-white/70 hover:text-white text-xs" aria-label="하위 메뉴 펼치기">▴</button>
+      </div>
+      <div id="evalSubnav" class="glossary-subnav pl-2.5 space-y-0.5 mt-1 text-xs">
+        <a href="exam.html" class="block px-2.5 py-1.5 rounded-full bg-slate-800 text-white whitespace-nowrap">평가</a>
+        <a href="study.html" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">학습 자료</a>
+      </div>
+    </div>
+    <div>
+      <div class="flex items-center rounded-xl hover:bg-slate-100">
+        <a href="v2.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">용어집</a>
+        <button type="button" id="glossaryNavToggle" class="glossary-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 카테고리 펼치기">▾</button>
+      </div>
+      <div id="glossarySubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs">
+        <a href="v2.html?cat=전체" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">전체</a>
+        <a href="v2.html?cat=제품 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">제품 용어</a>
+        <a href="v2.html?cat=추가 기능 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">추가 기능 용어</a>
+        <a href="v2.html?cat=UX 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">UX 용어</a>
+        <a href="v2.html?cat=IT 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">IT 용어</a>
+        <a href="v2.html?cat=종료 및 변경" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">종료 및 변경</a>
+      </div>
+    </div>
+    <a href="notice.html" class="flex items-center justify-between px-2.5 py-2 rounded-xl font-medium text-slate-600 hover:bg-slate-100 whitespace-nowrap">공지</a>
+    <div>
+      <div class="flex items-center rounded-xl hover:bg-slate-100">
+        <a href="learn.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">학습글</a>
+        <button type="button" id="learnNavToggle" class="learn-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 카테고리 펼치기">▾</button>
+      </div>
+      <div id="learnSubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs">
+        <a href="learn.html?cat=전체" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">전체</a>
+        <a href="learn.html?cat=티오더AI" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">티오더AI</a>
+        <a href="learn.html?cat=어드민" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">어드민</a>
+        <a href="learn.html?cat=POS연동" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">POS·외부연동</a>
+      </div>
+    </div>
+    <div>
+      <div class="flex items-center rounded-xl hover:bg-slate-100">
+        <a href="pos.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">POS</a>
+        <button type="button" id="posNavToggle" class="pos-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 지역 펼치기">▾</button>
+      </div>
+      <div id="posSubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs">
+        <a href="pos.html?region=전체" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">전체</a>
+        <a href="pos.html?region=국내" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">국내</a>
+        <a href="pos.html?region=해외" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">해외</a>
+        <a href="pos.html?mode=compare" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">비교</a>
+      </div>
+    </div>
+    <a href="guide.html" class="hidden flex items-center justify-between px-2.5 py-2 rounded-xl font-medium text-slate-600 hover:bg-slate-100 whitespace-nowrap">가이드</a>
+    <a href="/admin/dashboard.html" id="adminEntryLink" class="hidden flex items-center gap-1.5 px-2.5 py-2 rounded-xl font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 whitespace-nowrap">관리자 콘솔</a>
+  </nav>
+  <div class="p-3 border-t border-slate-100 text-xs text-slate-400 flex items-center justify-between gap-2">
+    <span id="userEmailLabel" class="truncate"></span>
+    <button onclick="AUTH.signOut()" class="text-slate-400 hover:text-rose-500 shrink-0">로그아웃</button>
+  </div>
+</aside>
+<button id="sidebarOpenBtn" type="button" class="hidden fixed top-4 left-4 z-20 w-7 h-7 flex items-center justify-center bg-white border border-slate-200 rounded-full shadow-sm text-slate-400 hover:bg-slate-50 text-xs" aria-label="사이드바 펼치기">▶</button>
+
+<!-- 본문 -->
+<div id="contentWrap" class="min-h-screen">
+  <header class="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
+    <div class="max-w-2xl mx-auto px-4 py-4">
+      <h2 class="text-lg font-bold">역량 평가 시험</h2>
+      <p class="text-xs text-slate-400 mt-1">객관식 24문항 · 합격 기준 전체 75% 이상 AND Tier 0 90% 이상</p>
+    </div>
+  </header>
+
+  <main class="max-w-2xl mx-auto px-4 py-6">
+    <!-- 시험 전 대기 상태 -->
+    <div id="state-waiting" class="hidden">
+      <div class="rounded-2xl border bg-blue-50 border-blue-100 p-8 text-center">
+        <p class="text-slate-700 mb-1 font-semibold">아직 시험을 시작하지 않으셨습니다.</p>
+        <p class="text-sm text-slate-500 mb-6">시작 버튼을 누르면 바로 문항이 표시됩니다. 응시 중에는 새로고침하지 마세요.</p>
+        <button id="btn-start" class="inline-block px-6 py-2.5 rounded-xl font-semibold bg-slate-800 text-white hover:bg-slate-900 transition">시험 시작</button>
+      </div>
+    </div>
+
+    <!-- 시험 중 상태 -->
+    <div id="state-exam" class="hidden">
+      <form id="exam-form">
+        <div id="questions-container"></div>
+        <div class="flex gap-3 mt-6">
+          <button type="submit" class="px-6 py-2.5 rounded-xl font-semibold bg-slate-800 text-white hover:bg-slate-900 transition">제출</button>
+          <button type="button" id="btn-cancel" class="px-6 py-2.5 rounded-xl font-semibold bg-slate-200 text-slate-700 hover:bg-slate-300 transition">취소</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- 결과 상태 -->
+    <div id="state-result" class="hidden">
+      <div class="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+        <div class="result-score" id="result-score">0</div>
+        <div class="result-status text-lg font-semibold mb-6" id="result-status">로딩 중...</div>
+
+        <div class="text-left bg-slate-50 rounded-xl p-4 mt-2">
+          <div class="result-detail-item">
+            <span class="text-slate-500 font-medium">총 문항 수</span>
+            <span class="text-slate-900 font-semibold" id="detail-total">0</span>
+          </div>
+          <div class="result-detail-item">
+            <span class="text-slate-500 font-medium">정답 개수</span>
+            <span class="text-slate-900 font-semibold" id="detail-correct">0</span>
+          </div>
+          <div class="result-detail-item">
+            <span class="text-slate-500 font-medium">Tier 0 정답률</span>
+            <span class="text-slate-900 font-semibold" id="detail-tier0">0%</span>
+          </div>
+          <div class="result-detail-item">
+            <span class="text-slate-500 font-medium">합격 기준</span>
+            <span class="text-slate-900 font-semibold">전체 75% 이상 AND Tier 0 90% 이상</span>
+          </div>
+        </div>
+
+        <div class="mt-8">
+          <button id="btn-home" class="px-6 py-2.5 rounded-xl font-semibold bg-slate-800 text-white hover:bg-slate-900 transition">돌아가기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 에러 상태 -->
+    <div id="error-container"></div>
+  </main>
+</div>
+
+<script>
+  // 사이드바 접기/펼치기 (localStorage로 상태 기억)
+  const MOBILE_BREAKPOINT = 768;
+  (function () {
+    const sidebar = document.getElementById('sidebar');
+    const openBtn = document.getElementById('sidebarOpenBtn');
+    const contentWrap = document.getElementById('contentWrap');
+    function applyMobileOffset(collapsed) {
+      const isNarrow = window.innerWidth <= MOBILE_BREAKPOINT;
+      contentWrap.style.marginLeft = (isNarrow && !collapsed) ? '176px' : '';
+    }
+    function applyState(collapsed) {
+      sidebar.classList.toggle('collapsed', collapsed);
+      openBtn.classList.toggle('hidden', !collapsed);
+      applyMobileOffset(collapsed);
+    }
+    applyState(localStorage.getItem('sidebarCollapsed') === 'true');
+    document.getElementById('sidebarToggle').addEventListener('click', () => {
+      localStorage.setItem('sidebarCollapsed', 'true');
+      applyState(true);
+    });
+    openBtn.addEventListener('click', () => {
+      localStorage.setItem('sidebarCollapsed', 'false');
+      applyState(false);
+    });
+    window.addEventListener('resize', () => {
+      applyMobileOffset(sidebar.classList.contains('collapsed'));
+    });
+  })();
+
+  function setupNavToggle(toggleId, subnavId) {
+    const subnav = document.getElementById(subnavId);
+    const btn = document.getElementById(toggleId);
+    btn.addEventListener('click', () => {
+      subnav.classList.toggle('hidden');
+      btn.textContent = subnav.classList.contains('hidden') ? '▾' : '▴';
+    });
+  }
+  setupNavToggle('evalNavToggle', 'evalSubnav');
+  setupNavToggle('glossaryNavToggle', 'glossarySubnav');
+  setupNavToggle('posNavToggle', 'posSubnav');
+    setupNavToggle('learnNavToggle', 'learnSubnav');
+
+  let currentUser, allQuestions = [], startTime = null, questionLog = {}, activeRoundId = null
+
+  window.__examInit = async function () {
+    try {
+      currentUser = window.__currentUser
+
+      // 활성 회차 조회
+      const { data: activeRound } = await AUTH.sb
+        .from('exam_rounds')
+        .select('id')
+        .eq('active', true)
+        .limit(1)
+        .maybeSingle()
+      activeRoundId = activeRound ? activeRound.id : null
+
+      // 문항 로드
+      const { data: questions, error } = await AUTH.sb
+        .from('questions')
+        .select('*')
+        .eq('status', 'published')
+        .order('qid', { ascending: true })
+
+      if (error) throw error
+
+      if (!questions || questions.length === 0) {
+        showError('아직 등록된 문항이 없습니다.')
+        return
+      }
+
+      allQuestions = questions
+      showState('waiting')
+
+      document.getElementById('btn-start').addEventListener('click', () => {
+        startTime = new Date()
+        questionLog = {}
+        renderExam()
+        showState('exam')
+      })
+
+      document.getElementById('btn-cancel').addEventListener('click', () => {
+        if (confirm('시험을 취소하시겠습니까?')) {
+          location.href = '/exam.html'
+        }
+      })
+
+      document.getElementById('exam-form').addEventListener('submit', async (e) => {
+        e.preventDefault()
+        await submitExam()
+      })
+
+      document.getElementById('btn-home').addEventListener('click', () => {
+        location.href = '/exam.html'
+      })
+    } catch (err) {
+      showError('오류: ' + err.message)
+    }
+  }
+
+  function renderExam() {
+    const marks = ['①', '②', '③', '④']
+    const container = document.getElementById('questions-container')
+    container.innerHTML = allQuestions.map((q, idx) => `
+      <div class="question-card" data-qid="${q.id}">
+        <div class="question-meta">
+          <span class="exam-badge">${q.qid}</span>
+          ${q.tier === 0 ? '<span class="exam-badge tier0">Tier 0</span>' : q.tier === 1 ? '<span class="exam-badge tier1">Tier 1</span>' : '<span class="exam-badge tier2">Tier 2</span>'}
+          ${q.axis ? `<span class="exam-badge">축${q.axis}</span>` : ''}
+          <span class="exam-badge">${q.domain}</span>
+        </div>
+        <div class="question-text">${idx + 1}. ${q.question_text}</div>
+        <div class="option-group">
+          ${(q.options || []).map((opt, i) => `
+            <label class="exam-option">
+              <input type="radio" name="q-${q.id}" value="${i}">
+              <span style="flex:1;">${marks[i]} ${opt}</span>
+            </label>
+          `).join('')}
+        </div>
+      </div>
+    `).join('')
+
+    allQuestions.forEach(q => {
+      const radios = document.querySelectorAll(`input[name="q-${q.id}"]`)
+      radios.forEach(radio => {
+        radio.addEventListener('change', () => {
+          const now = new Date().toISOString()
+          const selectedValue = parseInt(radio.value)
+
+          if (!questionLog[q.id]) {
+            questionLog[q.id] = {
+              selected: selectedValue,
+              changes: 0,
+              first_at: now,
+              last_at: now
+            }
+          } else {
+            if (questionLog[q.id].selected !== selectedValue) {
+              questionLog[q.id].changes += 1
+              questionLog[q.id].selected = selectedValue
+              questionLog[q.id].last_at = now
+            }
+          }
+        })
+      })
+    })
+  }
+
+  async function submitExam() {
+    try {
+      const submittedAt = new Date()
+
+      const answers = {}
+      allQuestions.forEach(q => {
+        const log = questionLog[q.id] || { selected: null, changes: 0, first_at: null, last_at: null }
+        const lateChange = log.last_at
+          ? (submittedAt - new Date(log.last_at)) <= 10000 && log.changes > 0
+          : false
+
+        answers[q.id] = {
+          selected: log.selected,
+          correct: q.correct_index,
+          changes: log.changes,
+          first_at: log.first_at,
+          last_at: log.last_at,
+          late_change: lateChange
+        }
+      })
+
+      let correct = 0, tier0Count = 0, tier0Correct = 0
+      allQuestions.forEach(q => {
+        const selected = answers[q.id].selected
+        if (selected === q.correct_index) {
+          correct++
+          if (q.tier === 0) tier0Correct++
+        }
+        if (q.tier === 0) tier0Count++
+      })
+
+      const score = Math.round((correct / allQuestions.length) * 100)
+      const tier0Score = tier0Count > 0 ? Math.round((tier0Correct / tier0Count) * 100) : 100
+      const passed = score >= 75 && tier0Score >= 90
+
+      let isRetake = false
+      if (activeRoundId) {
+        const { data: prior } = await AUTH.sb
+          .from('exam_attempts')
+          .select('id')
+          .eq('user_email', currentUser.email)
+          .eq('round_id', activeRoundId)
+          .limit(1)
+        isRetake = !!(prior && prior.length)
+      }
+
+      const { error } = await AUTH.sb.from('exam_attempts').insert([{
+        user_email: currentUser.email,
+        round_id: activeRoundId,
+        is_retake: isRetake,
+        started_at: startTime.toISOString(),
+        submitted_at: submittedAt.toISOString(),
+        answers: answers,
+        score: score,
+        passed: passed
+      }])
+
+      if (error) throw error
+
+      document.getElementById('result-score').textContent = score + '%'
+      document.getElementById('result-status').textContent = passed ? '합격' : '불합격'
+      document.getElementById('result-status').className = 'result-status text-lg font-semibold mb-6 ' + (passed ? 'passed' : 'failed')
+      document.getElementById('detail-total').textContent = allQuestions.length
+      document.getElementById('detail-correct').textContent = correct
+      document.getElementById('detail-tier0').textContent = tier0Score + '%'
+
+      showState('result')
+    } catch (err) {
+      showError('제출 실패: ' + err.message)
+    }
+  }
+
+  function showState(state) {
+    document.getElementById('state-waiting').classList.toggle('hidden', state !== 'waiting')
+    document.getElementById('state-exam').classList.toggle('hidden', state !== 'exam')
+    document.getElementById('state-result').classList.toggle('hidden', state !== 'result')
+  }
+
+  function showError(msg) {
+    const container = document.getElementById('error-container')
+    container.innerHTML = `<div class="rounded-xl border border-red-200 bg-red-50 text-red-600 px-4 py-3 text-sm">${msg}</div>`
+    showState('waiting')
+    document.getElementById('state-waiting').classList.remove('hidden')
+  }
+</script>
+
+</body>
+</html>

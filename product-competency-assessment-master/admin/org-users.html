@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>조직·사용자 관리</title>
+<link rel="stylesheet" href="/shared/admin-design.css">
+</head>
+<body>
+<div class="shell"> <nav class="sidebar" id="sidebar"></nav> <header class="topbar" id="topbar"></header> <main class="main"><div class="content"> <div class="page-head"><div> <h1 class="page-title">조직·사용자 관리</h1> <p class="page-desc">조직, 사용자, 평가 대상 여부 관리</p> </div></div> <div class="inline-note"> 특정 회차의 평가 대상자 배정은 <strong>평가 만들기</strong>(<code>/admin/round-create.html</code>)에서 진행합니다. 이 페이지는 전역 재직/평가대상 후보군 관리입니다.
+    </div> <div id="toolbar" style="display:grid; grid-template-columns:1fr auto auto; gap:12px; align-items:center;"> <div style="display:flex; gap:8px;"> <input type="text" id="search-name-email" class="input" placeholder="이름/이메일 검색" style="flex:1; max-width:200px;"> <select id="filter-team" class="input" style="flex:1; max-width:150px;"> <option value="">팀 (모두)</option> </select> <select id="filter-status" class="input" style="flex:1; max-width:150px;"> <option value="">재직상태 (모두)</option> <option value="재직">재직</option> <option value="퇴직">퇴직</option> </select> <select id="filter-eligible" class="input" style="flex:1; max-width:150px;"> <option value="">평가대상 (모두)</option> <option value="true">평가대상</option> <option value="false">제외</option> </select> </div> <button class="btn btn-outline" id="btn-bulk-cluster">클러스터 일괄 지정</button> </div> <div id="users-container"></div> </div></main>
+</div> <!-- Modal: Bulk Cluster -->
+<dialog class="modal" id="modal-bulk-cluster"> <div class="modal-head"> <h3>클러스터 일괄 지정</h3> <button class="modal-close" onclick="document.getElementById('modal-bulk-cluster').close()">✕</button> </div> <div class="modal-body"> <div style="margin-bottom:16px; padding:10px; background:var(--accent-subtle); border-radius:var(--radius-sm); font-size:var(--fs-sm); color:var(--accent);"> <strong id="selected-count">0명</strong>의 사용자가 선택되었습니다.
+    </div> <div class="field-grid"> <div class="field-row"> <label class="field-label">클러스터 <span class="req">*</span></label> <div class="field-value"> <input type="text" id="cluster-input" class="input" placeholder="예: A, B, C 등"> </div> </div> </div> </div> <div class="modal-foot"> <button class="btn btn-outline" onclick="document.getElementById('modal-bulk-cluster').close()">취소</button> <button class="btn btn-primary" id="btn-apply-cluster">지정</button> </div>
+</dialog> <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/shared/config.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/shared/nav.js"></script>
+<script>
+let allEmployees = []
+let filteredEmployees = []
+let currentAuth = null
+
+async function init() {
+  const auth = await AUTH.requirePage({admin: true})
+  if (!auth) return
+  currentAuth = auth
+
+  renderAdminShell({
+    role: auth.role,
+    current: '/admin/org-users.html',
+    email: auth.email,
+    rounds: [],
+    sidebarMount: 'sidebar',
+    topbarMount: 'topbar'
+  })
+
+  await loadData()
+  await populateFilters()
+  filterAndRender()
+
+  document.getElementById('search-name-email').addEventListener('input', () => filterAndRender())
+  document.getElementById('filter-team').addEventListener('change', () => filterAndRender())
+  document.getElementById('filter-status').addEventListener('change', () => filterAndRender())
+  document.getElementById('filter-eligible').addEventListener('change', () => filterAndRender())
+  document.getElementById('btn-bulk-cluster').addEventListener('click', () => {
+    document.getElementById('modal-bulk-cluster').showModal()
+  })
+  document.getElementById('btn-apply-cluster').addEventListener('click', applyBulkCluster)
+}
+
+async function loadData() {
+  const {data: employees} = await AUTH.sb.from('employees').select('*').order('name', {ascending: true})
+  allEmployees = employees || []
+}
+
+async function populateFilters() {
+  const teams = [...new Set(allEmployees.map(e => e.team).filter(Boolean))]
+  const teamSelect = document.getElementById('filter-team')
+  teamSelect.innerHTML = '<option value="">팀 (모두)</option>' + teams.map(t => `<option value="${t}">${escapeHtml(t)}</option>`).join('')
+}
+
+function filterAndRender() {
+  const search = document.getElementById('search-name-email').value.toLowerCase().trim()
+  const team = document.getElementById('filter-team').value
+  const status = document.getElementById('filter-status').value
+  const eligible = document.getElementById('filter-eligible').value
+
+  filteredEmployees = allEmployees.filter(emp => {
+    if (search && !emp.name.toLowerCase().includes(search) && !emp.email.toLowerCase().includes(search)) return false
+    if (team && emp.team !== team) return false
+    if (status && emp.status !== status) return false
+    if (eligible !== '' && (eligible === 'true' ? !emp.eligible : emp.eligible)) return false
+    return true
+  })
+
+  renderUsers()
+}
+
+async function renderUsers() {
+  const rows = filteredEmployees.map((emp, idx) => {
+    const statusBadge = emp.status === '재직' ? 'badge--success' : 'badge--neutral'
+    const statusText = emp.status || '미정'
+    const clusterText = emp.cluster || '—'
+
+    return `
+      <tr> <td><input type="checkbox" class="user-checkbox" data-emp-no="${escapeAttr(emp.emp_no)}" data-email="${escapeAttr(emp.email)}"></td> <td><strong>${escapeHtml(emp.name)}</strong><br><span style="color:var(--text-tertiary); font-size:var(--fs-xs);">${escapeHtml(emp.disp_name || '')}</span></td> <td>${escapeHtml(emp.email)}</td> <td>${escapeHtml(emp.team || '—')}</td> <td><span class="badge ${statusBadge}">${statusText}</span></td> <td>${clusterText}</td> <td> <label class="switch"> <input type="checkbox" ${emp.eligible ? 'checked' : ''} onchange="toggleEligible('${escapeAttr(emp.email)}', this.checked)"> <span class="switch-slider"></span> </label> </td> </tr> `
+  }).join('')
+
+  const tableHtml = `
+    <div class="table-wrap table-wrap--scroll"> <table class="data-table"> <thead> <tr> <th style="width:40px;"><input type="checkbox" id="select-all"></th> <th>이름</th> <th>이메일</th> <th>팀</th> <th>재직상태</th> <th>클러스터</th> <th style="width:80px; text-align:center;">평가대상</th> </tr> </thead> <tbody> ${rows}
+        </tbody> </table> </div> `
+
+  document.getElementById('users-container').innerHTML = tableHtml
+
+  // Select all checkbox
+  const selectAllCheckbox = document.getElementById('select-all')
+  const userCheckboxes = document.querySelectorAll('.user-checkbox')
+
+  selectAllCheckbox.addEventListener('change', () => {
+    userCheckboxes.forEach(cb => cb.checked = selectAllCheckbox.checked)
+  })
+
+  userCheckboxes.forEach(cb => {
+    cb.addEventListener('change', () => {
+      selectAllCheckbox.checked = Array.from(userCheckboxes).every(c => c.checked)
+    })
+  })
+}
+
+async function toggleEligible(email, eligible) {
+  try {
+    const {error} = await AUTH.sb.from('employees').update({eligible}).eq('email', email)
+    if (error) throw error
+
+    const emp = allEmployees.find(e => e.email === email)
+    if (emp) emp.eligible = eligible
+
+    await logAudit('employee.eligibility_change', `${email}: eligible=${eligible}`)
+  } catch (err) {
+    alert('업데이트 실패: ' + err.message)
+    filterAndRender()
+  }
+}
+
+async function applyBulkCluster() {
+  const cluster = document.getElementById('cluster-input').value.trim()
+  if (!cluster) {
+    alert('클러스터 값을 입력하세요.')
+    return
+  }
+
+  const selectedEmails = Array.from(document.querySelectorAll('.user-checkbox:checked')).map(cb => cb.dataset.email)
+  if (selectedEmails.length === 0) {
+    alert('선택된 사용자가 없습니다.')
+    return
+  }
+
+  try {
+    for (const email of selectedEmails) {
+      const {error} = await AUTH.sb.from('employees').update({cluster}).eq('email', email)
+      if (error) throw error
+      const emp = allEmployees.find(e => e.email === email)
+      if (emp) emp.cluster = cluster
+    }
+
+    await logAudit('employee.cluster_bulk', `${selectedEmails.length}명: cluster="${cluster}" 지정`)
+    document.getElementById('modal-bulk-cluster').close()
+    filterAndRender()
+  } catch (err) {
+    alert('업데이트 실패: ' + err.message)
+  }
+}
+
+async function logAudit(action, detail) {
+  await AUTH.sb.from('admin_audit_log').insert([{
+    actor_email: currentAuth.email,
+    action,
+    detail
+  }])
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+function escapeAttr(text) {
+  return String(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
+init()
+</script>
+</body>
+</html>

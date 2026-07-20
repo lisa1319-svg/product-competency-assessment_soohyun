@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>알림 설정</title>
+<link rel="stylesheet" href="/shared/admin-design.css">
+</head>
+<body>
+<div class="shell"> <nav class="sidebar" id="sidebar"></nav> <header class="topbar" id="topbar"></header> <main class="main"><div class="content"> <div class="page-head"><div> <h1 class="page-title">알림 설정</h1> <p class="page-desc">평가 안내와 독려 알림 문구 및 발송 여부 설정</p> </div></div> <div class="notice-callout"> <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg> <div> <strong> 알림:</strong> 이 화면의 발송 기능은 아직 실제 이메일/슬랙 발송과 연동되어 있지 않습니다. 토글과 문구는 UI 목업 상태입니다.
+      </div> </div> <div id="notifications-container"></div> </div></main>
+</div> <!-- 문구 수정 모달 -->
+<dialog id="edit-modal" class="modal"> <div class="modal-head"> <h3 id="modal-title">문구 수정</h3> <button type="button" class="modal-close" onclick="document.getElementById('edit-modal').close()">&times;</button> </div> <div class="modal-body"> <label style="display:block; margin-bottom:8px; font-size:var(--fs-sm); font-weight:600;">알림 문구</label> <textarea id="modal-textarea" class="input" style="height:120px; resize:vertical;"></textarea> </div> <div class="modal-foot"> <button type="button" class="btn btn-outline" onclick="document.getElementById('edit-modal').close()">취소</button> <button type="button" class="btn btn-primary" id="modal-save-btn">저장</button> </div>
+</dialog> <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/shared/config.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/shared/nav.js"></script>
+<script>
+const NOTIFICATIONS = [
+  {
+    id: 'start',
+    name: '평가 시작 안내',
+    desc: '응시자에게 평가가 시작됨을 알립니다.',
+    method: '이메일',
+    enableKey: 'notif_start_enabled',
+    textKey: 'notif_start_text',
+    defaultText: '안녕하세요.\n\n역량 평가가 시작되었습니다.\n응시 기간 내에 평가를 완료해 주시기 바랍니다.'
+  },
+  {
+    id: 'deadline',
+    name: '마감 전 안내',
+    desc: '평가 마감 24시간 전 응시자에게 알립니다.',
+    method: '이메일',
+    enableKey: 'notif_deadline_enabled',
+    textKey: 'notif_deadline_text',
+    defaultText: '안녕하세요.\n\n평가 마감이 24시간 남았습니다.\n아직 응시하지 않으셨다면 서둘러 주시기 바랍니다.'
+  },
+  {
+    id: 'encourage',
+    name: '미응시 독려',
+    desc: '마감 후 미응시 직원에게 재시험 기회를 안내합니다.',
+    method: '이메일',
+    enableKey: 'notif_encourage_enabled',
+    textKey: 'notif_encourage_text',
+    defaultText: '안녕하세요.\n\n지난 평가에 응시하지 못하셨습니다.\n재시험 기회가 있으니 참여 부탁드립니다.'
+  },
+  {
+    id: 'retake',
+    name: '재시험 안내',
+    desc: '불합격 응시자에게 재시험 기회를 알립니다.',
+    method: '이메일 / 슬랙',
+    enableKey: 'notif_retake_enabled',
+    textKey: 'notif_retake_text',
+    defaultText: '안녕하세요.\n\n평가 결과를 안내드립니다.\n재시험 기회가 제공되니 참여 부탁드립니다.'
+  },
+  {
+    id: 'result',
+    name: '결과 안내',
+    desc: '평가 결과를 응시자에게 공개합니다.',
+    method: '이메일 / 시스템 내 조회',
+    enableKey: 'notif_result_enabled',
+    textKey: 'notif_result_text',
+    defaultText: '안녕하세요.\n\n귀하의 평가 결과는 다음과 같습니다.\n자세한 사항은 평가 화면에서 확인하실 수 있습니다.'
+  }
+]
+
+let currentAuth = null
+let currentEditingNotifId = null
+let notifState = {}
+
+async function init() {
+  const auth = await AUTH.requirePage({admin: true})
+  if (!auth) return
+  currentAuth = auth
+
+  renderAdminShell({
+    role: auth.role,
+    current: '/admin/notifications.html',
+    email: auth.email,
+    rounds: [],
+    sidebarMount: 'sidebar',
+    topbarMount: 'topbar'
+  })
+
+  await loadNotifications()
+  renderNotifications()
+  attachModalListeners()
+}
+
+async function loadNotifications() {
+  try {
+    const keys = NOTIFICATIONS.flatMap(n => [n.enableKey, n.textKey])
+    const {data, error} = await AUTH.sb.from('app_settings').select('key, value').in('key', keys)
+    if (error) {
+      console.error('Failed to load notifications:', error)
+    }
+
+    notifState = {}
+    NOTIFICATIONS.forEach(n => {
+      notifState[n.enableKey] = true
+      notifState[n.textKey] = n.defaultText
+    })
+
+    if (data) {
+      data.forEach(row => {
+        const val = row.value
+        const actualValue = typeof val === 'object' && val !== null ? val.value !== undefined ? val.value : val : val
+        notifState[row.key] = actualValue
+      })
+    }
+  } catch (err) {
+    console.error('Error loading notifications:', err)
+    NOTIFICATIONS.forEach(n => {
+      notifState[n.enableKey] = true
+      notifState[n.textKey] = n.defaultText
+    })
+  }
+}
+
+function renderNotifications() {
+  const html = NOTIFICATIONS.map(notif => `
+    <div class="panel"> <div class="settings-row"> <div> <div class="settings-row__label">${notif.name}</div> <div class="settings-row__desc">${notif.desc} (${notif.method})</div> </div> <div style="display:flex; align-items:center; gap:12px;"> <label class="switch"> <input type="checkbox" class="notif-toggle" data-notif-id="${notif.id}" data-key="${notif.enableKey}" ${notifState[notif.enableKey] ? 'checked' : ''}> <span class="switch-slider"></span> </label> <button type="button" class="btn btn-sm btn-outline edit-notif-btn" data-notif-id="${notif.id}">문구 수정</button> </div> </div> </div> `).join('')
+
+  document.getElementById('notifications-container').innerHTML = html
+
+  document.querySelectorAll('.notif-toggle').forEach(el => {
+    el.addEventListener('change', toggleNotification)
+  })
+
+  document.querySelectorAll('.edit-notif-btn').forEach(el => {
+    el.addEventListener('click', openEditModal)
+  })
+}
+
+async function toggleNotification(e) {
+  const notifId = e.target.dataset.notifId
+  const key = e.target.dataset.key
+  const enabled = e.target.checked
+  const notif = NOTIFICATIONS.find(n => n.id === notifId)
+
+  try {
+    const {error} = await AUTH.sb.from('app_settings').upsert({
+      key: key,
+      value: enabled,
+      updated_by: currentAuth.email,
+      updated_at: new Date().toISOString()
+    }, {onConflict: 'key'})
+
+    if (error) {
+      console.error(`Failed to toggle ${key}:`, error)
+      e.target.checked = !enabled
+      return
+    }
+
+    notifState[key] = enabled
+    showToast(`${notif.name} ${enabled ? '활성화' : '비활성화'}됨`, 'success')
+
+    // Audit log
+    await AUTH.sb.from('admin_audit_log').insert({
+      actor_email: currentAuth.email,
+      action: 'notification.toggle',
+      detail: `${notif.name} ${enabled ? '활성화' : '비활성화'}`,
+      created_at: new Date().toISOString()
+    })
+  } catch (err) {
+    console.error('Error toggling notification:', err)
+    e.target.checked = !enabled
+  }
+}
+
+function openEditModal(e) {
+  const notifId = e.target.dataset.notifId
+  const notif = NOTIFICATIONS.find(n => n.id === notifId)
+  currentEditingNotifId = notifId
+
+  document.getElementById('modal-title').textContent = notif.name + ' - 문구 수정'
+  const textarea = document.getElementById('modal-textarea')
+  textarea.value = notifState[notif.textKey] || notif.defaultText
+  document.getElementById('edit-modal').showModal()
+}
+
+async function saveEditModal() {
+  if (!currentEditingNotifId) return
+
+  const notif = NOTIFICATIONS.find(n => n.id === currentEditingNotifId)
+  const newText = document.getElementById('modal-textarea').value.trim()
+
+  if (!newText) {
+    showToast('문구를 입력해주세요.', 'error')
+    return
+  }
+
+  try {
+    const {error} = await AUTH.sb.from('app_settings').upsert({
+      key: notif.textKey,
+      value: newText,
+      updated_by: currentAuth.email,
+      updated_at: new Date().toISOString()
+    }, {onConflict: 'key'})
+
+    if (error) {
+      console.error(`Failed to save ${notif.textKey}:`, error)
+      showToast('저장 실패', 'error')
+      return
+    }
+
+    notifState[notif.textKey] = newText
+    document.getElementById('edit-modal').close()
+    showToast('문구가 저장되었습니다.', 'success')
+
+    // Audit log
+    await AUTH.sb.from('admin_audit_log').insert({
+      actor_email: currentAuth.email,
+      action: 'notification.update_text',
+      detail: `${notif.name} 문구 수정`,
+      created_at: new Date().toISOString()
+    })
+  } catch (err) {
+    console.error('Error saving notification text:', err)
+    showToast('저장 중 오류가 발생했습니다.', 'error')
+  }
+}
+
+function attachModalListeners() {
+  document.getElementById('modal-save-btn').addEventListener('click', saveEditModal)
+}
+
+function showToast(msg, type) {
+  const toast = document.createElement('div')
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    z-index: 9999;
+    animation: slideInUp 0.3s ease-out;
+  `
+
+  if (type === 'success') {
+    toast.style.background = 'var(--success)'
+    toast.style.color = '#fff'
+  } else if (type === 'error') {
+    toast.style.background = 'var(--danger)'
+    toast.style.color = '#fff'
+  }
+
+  toast.textContent = msg
+  document.body.appendChild(toast)
+
+  setTimeout(() => {
+    toast.style.animation = 'slideOutDown 0.3s ease-in'
+    setTimeout(() => toast.remove(), 300)
+  }, 2500)
+}
+
+const style = document.createElement('style')
+style.textContent = `
+  @keyframes slideInUp {
+    from { transform: translateY(100px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes slideOutDown {
+    from { transform: translateY(0); opacity: 1; }
+    to { transform: translateY(100px); opacity: 0; }
+  }
+`
+document.head.appendChild(style)
+
+init()
+</script>
+</body>
+</html>

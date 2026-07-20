@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>학습자료 관리 - 콘텐츠 관리</title>
+<link rel="stylesheet" href="/shared/admin-design.css">
+<style>
+  .materials-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .kpi-mini {
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    text-align: center;
+  }
+
+  .kpi-mini__label {
+    font-size: var(--fs-xs);
+    color: var(--text-tertiary);
+    margin-bottom: 4px;
+  }
+
+  .kpi-mini__value {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text-primary);
+  }
+
+  .kpi-mini__note {
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .materials-table {
+    width: 100%;
+  }
+
+  .materials-table thead th {
+    background: var(--surface-sunken);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  .materials-table tbody tr {
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .materials-table tbody tr:hover {
+    background: var(--surface-sunken);
+  }
+
+  .materials-table td {
+    padding: 12px 14px;
+    vertical-align: middle;
+  }
+
+  .material-name {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .material-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .material-badge.low-engagement {
+    background: var(--danger-subtle);
+    color: var(--danger);
+  }
+
+  .material-badge.medium-engagement {
+    background: var(--warning-bg);
+    color: var(--warning-text);
+  }
+
+  .material-badge.good-engagement {
+    background: var(--success-subtle);
+    color: #097146;
+  }
+
+  .time-display {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .link-icon {
+    display: inline;
+    margin-left: 2px;
+  }
+
+  .loading-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border-subtle);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <header class="topbar" id="topbar"></header>
+  <main class="main"><div class="content">
+    <div class="page-head"><div>
+      <h1 class="page-title">학습자료</h1>
+      <p class="page-desc">학습자료 열람 현황과 문항 카테고리 연결 관계 관리</p>
+    </div></div>
+
+    <div id="materials-container" style="display: flex; flex-direction: column; gap: 20px;"></div>
+  </div></main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/shared/config.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/shared/nav.js"></script>
+<script>
+const MATERIALS = [
+  {key: 'study', name: '학습 자료', url: '/study.html', type: '온라인 학습', domains: ['전체']},
+  {key: 'v2', name: '용어집', url: '/v2.html', type: '참고 자료', domains: ['기본 IT 용어']},
+  {key: 'guide', name: '가이드', url: '/guide.html', type: '운영 가이드', domains: ['전체']},
+  {key: 'pos', name: 'POS 자동연동', url: '/pos.html', type: '사용 설명서', domains: ['POS 자동연동']},
+  {key: 'notice', name: '공지', url: '/notice.html', type: '공지사항', domains: ['전체']}
+];
+
+let allViews = [];
+let allEmployees = [];
+let activeRound = null;
+let targetEmails = [];
+
+function formatDuration(seconds) {
+  if (!seconds || seconds === 0) return '—';
+  const totalSecs = Math.round(Number(seconds));
+  const mins = Math.floor(totalSecs / 60);
+  const secs = totalSecs % 60;
+  return `${mins}분 ${secs}초`;
+}
+
+function calculateStats(materialKey) {
+  const matViews = allViews.filter(v => v.page === materialKey);
+
+  // 누적 열람자
+  const uniqueViewers = new Set(matViews.map(v => v.user_email)).size;
+
+  // 평균 체류시간 (duration_seconds 활용)
+  let totalDuration = 0;
+  let countWithDuration = 0;
+  matViews.forEach(v => {
+    if (v.duration_seconds && v.duration_seconds > 0) {
+      totalDuration += Number(v.duration_seconds);
+      countWithDuration++;
+    }
+  });
+  const avgDuration = countWithDuration > 0 ? totalDuration / countWithDuration : 0;
+
+  // 최근 7일 열람 수
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const recentViews7d = matViews.filter(v => new Date(v.viewed_at) >= sevenDaysAgo).length;
+
+  // 미열람 비율 (활성 회차 대상자 기준)
+  const totalTargets = targetEmails.length > 0 ? targetEmails.length : allEmployees.length;
+  const unviewedCount = totalTargets - uniqueViewers;
+  const unviewedRate = totalTargets > 0 ? (unviewedCount / totalTargets) * 100 : 0;
+
+  return {
+    viewers: uniqueViewers,
+    avgDuration,
+    avgDurationFormatted: formatDuration(avgDuration),
+    recent7d: recentViews7d,
+    totalViews: matViews.length,
+    unviewedRate: unviewedRate.toFixed(1),
+    unviewedCount,
+    totalTargets
+  };
+}
+
+function getEngagementLevel(stats) {
+  const unviewedRate = Number(stats.unviewedRate);
+  if (unviewedRate >= 40) return 'low';
+  if (unviewedRate >= 20) return 'medium';
+  return 'good';
+}
+
+async function init() {
+  const auth = await AUTH.requirePage({admin: true});
+  if (!auth) return;
+
+  renderAdminShell({
+    role: auth.role,
+    current: '/admin/materials.html',
+    email: auth.email,
+    rounds: [],
+    sidebarMount: 'sidebar',
+    topbarMount: 'topbar'
+  });
+
+  await loadData();
+  renderMaterials();
+}
+
+async function loadData() {
+  try {
+    // 모든 자료 열람 로그
+    const {data: views} = await AUTH.sb.from('material_views').select('*');
+    allViews = views || [];
+
+    // 모든 직원 정보
+    const {data: emps} = await AUTH.sb.from('employees').select('*').eq('status', '재직');
+    allEmployees = emps || [];
+
+    // 활성 회차 조회
+    const {data: rounds} = await AUTH.sb.from('exam_rounds').select('id').eq('active', true).maybeSingle();
+    if (rounds) {
+      activeRound = rounds.id;
+      // 활성 회차 대상자 조회
+      const {data: targets} = await AUTH.sb.from('exam_round_targets').select('email').eq('round_id', activeRound);
+      targetEmails = (targets || []).map(t => t.email);
+    }
+  } catch (err) {
+    console.error('Failed to load data:', err);
+  }
+}
+
+function renderMaterials() {
+  const container = document.getElementById('materials-container');
+
+  // KPI 요약
+  const kpiSummary = document.createElement('div');
+  kpiSummary.className = 'panel';
+
+  const stats = MATERIALS.map(m => calculateStats(m.key));
+  const avgViewers = Math.round(stats.reduce((sum, s) => sum + s.viewers, 0) / stats.length);
+  const totalViews = stats.reduce((sum, s) => sum + s.totalViews, 0);
+  const avgUnviewedRate = (stats.reduce((sum, s) => sum + Number(s.unviewedRate), 0) / stats.length).toFixed(1);
+
+  kpiSummary.innerHTML = `
+    <div class="panel-head">
+      <h2 style="font-size: var(--fs-md); font-weight: 700;">학습자료 열람 요약</h2>
+    </div>
+    <div class="panel-body">
+      <div class="materials-grid">
+        <div class="kpi-mini">
+          <div class="kpi-mini__label">평균 열람자 수</div>
+          <div class="kpi-mini__value">${avgViewers}</div>
+          <div class="kpi-mini__note">자료당 누적</div>
+        </div>
+        <div class="kpi-mini">
+          <div class="kpi-mini__label">총 열람 건수</div>
+          <div class="kpi-mini__value">${totalViews}</div>
+          <div class="kpi-mini__note">전체 기간</div>
+        </div>
+        <div class="kpi-mini">
+          <div class="kpi-mini__label">평균 미열람률</div>
+          <div class="kpi-mini__value" style="color: ${Number(avgUnviewedRate) >= 40 ? 'var(--danger)' : 'var(--text-primary)'}">${avgUnviewedRate}%</div>
+          <div class="kpi-mini__note">대상자 기준</div>
+        </div>
+        <div class="kpi-mini">
+          <div class="kpi-mini__label">평가 대상자</div>
+          <div class="kpi-mini__value">${targetEmails.length > 0 ? targetEmails.length : allEmployees.length}</div>
+          <div class="kpi-mini__note">활성 회차 기준</div>
+        </div>
+      </div>
+    </div>
+  `;
+  container.appendChild(kpiSummary);
+
+  // 자료별 상세 테이블
+  const tableSection = document.createElement('div');
+  tableSection.className = 'panel';
+
+  const tableRows = MATERIALS.map((mat, idx) => {
+    const stats = calculateStats(mat.key);
+    const level = getEngagementLevel(stats);
+    const badgeClass = level === 'low' ? 'material-badge low-engagement' :
+                        level === 'medium' ? 'material-badge medium-engagement' :
+                        'material-badge good-engagement';
+    const badgeText = level === 'low' ? '주의 필요' :
+                       level === 'medium' ? '개선 권고' :
+                       '양호';
+
+    return `
+      <tr>
+        <td class="material-name">${mat.name}</td>
+        <td>${mat.type}</td>
+        <td>${mat.domains.join(', ')}</td>
+        <td style="text-align: center;">${stats.viewers}</td>
+        <td style="text-align: center;" class="time-display">${stats.avgDurationFormatted}</td>
+        <td style="text-align: center;">${stats.recent7d}</td>
+        <td style="text-align: center;">
+          <span class="${badgeClass}">${stats.unviewedRate}%</span>
+        </td>
+        <td>
+          <a href="${mat.url}" target="_blank" style="color: var(--accent); text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+            이동<span style="font-size: 12px;">↗</span>
+          </a>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  tableSection.innerHTML = `
+    <div class="panel-head">
+      <h2 style="font-size: var(--fs-md); font-weight: 700;">자료별 열람 현황</h2>
+    </div>
+    <div class="panel-body panel-body--flush">
+      <div class="table-wrap">
+        <table class="materials-table data-table">
+          <thead>
+            <tr>
+              <th>자료명</th>
+              <th>유형</th>
+              <th>카테고리</th>
+              <th>열람인원</th>
+              <th>평균 체류시간</th>
+              <th>최근 7일</th>
+              <th>미열람률</th>
+              <th>페이지</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  container.appendChild(tableSection);
+
+  // 상세 정보 카드
+  const detailSection = document.createElement('div');
+  detailSection.className = 'panel';
+
+  const detailCards = MATERIALS.map(mat => {
+    const stats = calculateStats(mat.key);
+    const level = getEngagementLevel(stats);
+    const statusColor = level === 'low' ? 'var(--danger)' :
+                        level === 'medium' ? 'var(--warning-text)' :
+                        'var(--success)';
+
+    return `
+      <div style="padding: 16px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: start;">
+        <div>
+          <h3 style="font-size: var(--fs-base); font-weight: 700; margin-bottom: 8px;">${mat.name}</h3>
+          <div style="display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 14px; font-size: var(--fs-sm);">
+            <div>
+              <div style="color: var(--text-tertiary); margin-bottom: 4px;">누적 열람자</div>
+              <div style="font-weight: 600; color: var(--text-primary);">${stats.viewers}명</div>
+              <div style="color: var(--text-muted); font-size: var(--fs-xs); margin-top: 2px;">${stats.totalTargets}명 중</div>
+            </div>
+            <div>
+              <div style="color: var(--text-tertiary); margin-bottom: 4px;">평균 체류시간</div>
+              <div style="font-weight: 600; color: var(--text-primary);" class="time-display">${stats.avgDurationFormatted}</div>
+              <div style="color: var(--text-muted); font-size: var(--fs-xs); margin-top: 2px;">지속성 평가</div>
+            </div>
+            <div>
+              <div style="color: var(--text-tertiary); margin-bottom: 4px;">최근 7일</div>
+              <div style="font-weight: 600; color: var(--text-primary);">${stats.recent7d}건</div>
+              <div style="color: var(--text-muted); font-size: var(--fs-xs); margin-top: 2px;">총 ${stats.totalViews}건</div>
+            </div>
+            <div>
+              <div style="color: var(--text-tertiary); margin-bottom: 4px;">미열람률</div>
+              <div style="font-weight: 600; color: ${statusColor};">${stats.unviewedRate}%</div>
+              <div style="color: var(--text-muted); font-size: var(--fs-xs); margin-top: 2px;">${stats.unviewedCount}명 미열람</div>
+            </div>
+          </div>
+        </div>
+        <div style="text-align: right;">
+          <a href="${mat.url}" target="_blank" class="btn btn-outline">자료 열기</a>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  detailSection.innerHTML = `
+    <div class="panel-head">
+      <h2 style="font-size: var(--fs-md); font-weight: 700;">자료별 상세 현황</h2>
+    </div>
+    <div class="panel-body panel-body--flush">
+      ${detailCards}
+    </div>
+  `;
+  container.appendChild(detailSection);
+}
+
+init();
+</script>
+</body>
+</html>

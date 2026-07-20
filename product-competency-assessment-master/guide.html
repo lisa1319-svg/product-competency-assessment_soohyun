@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>t'order 가이드 - 가이드</title> <!-- Pretendard 웹폰트 -->
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" /> <!-- Tailwind CSS (CDN) -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/shared/config.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/shared/track.js"></script> <style> html, body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  #sidebar {
+    width: 176px;
+    transition: width 0.15s ease;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 30;
+  }
+  #sidebar.collapsed { width: 0; overflow: hidden; border-right: none; }
+  #contentWrap { transition: margin-left 0.15s ease; }
+  .glossary-subnav.hidden { display: none; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen" style="visibility:hidden">
+<script>(function(){ AUTH.requirePage().then(function(u){ if(u){ logMaterialView('guide'); document.body.style.visibility='visible'; var el=document.getElementById('userEmailLabel'); if(el) el.textContent=u.email; var adminLink=document.getElementById('adminEntryLink'); if(adminLink && u.role && u.role!=='test_taker') adminLink.classList.remove('hidden'); } }); })();</script> <!-- 사이드바 (화면에 고정되어 떠 있으며, 본문 레이아웃에 영향을 주지 않습니다) --> <aside id="sidebar" class="bg-white border-r border-slate-200 flex flex-col"> <div class="p-3 flex items-center justify-between gap-2 border-b border-slate-100"> <img src="/shared/logo-dark-text.png" alt="t'order" class="h-4 w-auto"> <button id="sidebarToggle" type="button" class="w-6 h-6 shrink-0 flex items-center justify-center rounded-full text-xs text-slate-400 bg-slate-100 hover:bg-slate-200" aria-label="사이드바 접기">◀</button> </div> <nav class="flex-1 px-2 py-3 space-y-1 text-sm overflow-y-auto"> <div> <div class="flex items-center rounded-xl hover:bg-slate-100"> <a href="exam.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">역량 평가</a> <button type="button" id="evalNavToggle" class="eval-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 메뉴 펼치기">▾</button> </div> <div id="evalSubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs"> <a href="exam.html" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">평가</a> <a href="study.html" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">학습 자료</a> </div> </div> <div> <div class="flex items-center rounded-xl hover:bg-slate-100"> <a href="v2.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">용어집</a> <button type="button" id="glossaryNavToggle" class="glossary-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 카테고리 펼치기">▾</button> </div> <div id="glossarySubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs"> <a href="v2.html?cat=전체" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">전체</a> <a href="v2.html?cat=제품 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">제품 용어</a> <a href="v2.html?cat=추가 기능 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">추가 기능 용어</a> <a href="v2.html?cat=UX 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">UX 용어</a> <a href="v2.html?cat=IT 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">IT 용어</a> <a href="v2.html?cat=종료 및 변경" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">종료 및 변경</a> </div> </div> <a href="notice.html" class="flex items-center justify-between px-2.5 py-2 rounded-xl font-medium text-slate-600 hover:bg-slate-100 whitespace-nowrap">공지 <span id="noticeNavBadge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] align-middle">NEW</span></a> <div> <div class="flex items-center rounded-xl hover:bg-slate-100"> <a href="learn.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">학습글</a> <button type="button" id="learnNavToggle" class="learn-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 카테고리 펼치기">▾</button> </div> <div id="learnSubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs"> <a href="learn.html?cat=전체" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">전체</a> <a href="learn.html?cat=티오더AI" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">티오더AI</a> <a href="learn.html?cat=어드민" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">어드민</a> <a href="learn.html?cat=POS연동" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">POS·외부연동</a> </div> </div> <div> <div class="flex items-center rounded-xl hover:bg-slate-100"> <a href="pos.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">POS <span id="posNavBadge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] align-middle">NEW</span></a> <button type="button" id="posNavToggle" class="pos-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 지역 펼치기">▾</button> </div> <div id="posSubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs"> <a href="pos.html?region=전체" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">전체</a> <a href="pos.html?region=국내" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">국내</a> <a href="pos.html?region=해외" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">해외</a> <a href="pos.html?mode=compare" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">비교</a> </div> </div> <a href="guide.html" class="hidden block px-2.5 py-2 rounded-xl font-medium bg-slate-800 text-white whitespace-nowrap">가이드</a> <a href="/admin/dashboard.html" id="adminEntryLink" class="hidden flex items-center gap-1.5 px-2.5 py-2 rounded-xl font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 whitespace-nowrap"> 관리자 콘솔</a> </nav> <div class="p-3 border-t border-slate-100 text-xs text-slate-400 flex items-center justify-between gap-2"> <span id="userEmailLabel" class="truncate"></span> <button onclick="AUTH.signOut()" class="text-slate-400 hover:text-rose-500 shrink-0">로그아웃</button> </div> </aside> <!-- 접혔을 때 다시 펼치는 버튼 --> <button id="sidebarOpenBtn" type="button" class="hidden fixed top-4 left-4 z-20 w-7 h-7 flex items-center justify-center bg-white border border-slate-200 rounded-full shadow-sm text-slate-400 hover:bg-slate-50 text-xs" aria-label="사이드바 펼치기">▶</button> <button id="scrollTopBtn" type="button" class="hidden fixed bottom-6 right-6 z-20 w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-full shadow-md text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition" aria-label="맨 위로">↑</button> <!-- 본문: 사이드바 상태와 무관하게 항상 화면 중앙에 고정 --> <div id="contentWrap" class="min-h-screen"> <div id="newNoticeBanner" class="hidden max-w-4xl mx-auto pt-3 px-4"> <div class="bg-rose-50 border border-rose-100 text-rose-700 text-sm rounded-xl px-4 py-2 flex items-center justify-between gap-2"> <span> 새 공지가 등록되었습니다. <a href="notice.html" class="underline font-medium">확인하러 가기 →</a></span> <span class="flex items-center gap-2 shrink-0"> <button type="button" id="hideNoticeBannerToday" class="text-[10px] text-rose-300 hover:text-rose-500 underline">더 이상 보지 않기</button> <button type="button" id="dismissNoticeBanner" class="text-rose-400 hover:text-rose-600 px-1">×</button> </span> </div> </div> <!-- 상단: 검색창 --> <header class="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm"> <div class="max-w-4xl mx-auto px-4 py-4"> <input
+          id="searchInput"
+          type="text"
+          placeholder="상황, 답변으로 검색..."
+          class="w-full px-4 py-2 rounded-full border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400"
+        /> </div> </header> <!-- 개발 단계별 R&R, 협업 방식 정리 (고정 참고 자료) --> <section class="max-w-4xl mx-auto px-4 pt-6"> <div class="bg-white border border-slate-200 rounded-2xl p-4"> <h3 class="font-bold text-sm">개발 단계별 R&R, 협업 방식 정리</h3> <p class="text-xs text-rose-500 mt-1 mb-4">VOC(요구사항) 접수 → 기획 → 디자인 → 개발 → QA → 운영배포 (반복), 각 단계별 소통 방식 개선 고민</p> <div class="flex flex-wrap gap-3 mb-3 text-[11px] text-slate-500"> <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-slate-200 inline-block"></span>Backlog (보류)</span> <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-blue-100 inline-block"></span>업무 진행필요 (담당자 지정 → 진행)</span> <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-emerald-100 inline-block"></span>운영 배포 완료 (이해관계자)</span> <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-yellow-100 inline-block"></span>소통</span> </div> <div class="overflow-x-auto"> <table class="w-full min-w-[760px] text-xs text-center" style="border-spacing: 4px; border-collapse: separate;"> <thead> <tr class="text-slate-500"> <th class="w-24 p-2 text-left align-bottom font-normal">개발 단계<br />Role</th> <th class="p-2 bg-slate-50 rounded-lg font-medium">요구사항 접수</th> <th class="p-2 bg-slate-50 rounded-lg font-medium">요구사항 확인</th> <th class="p-2 bg-slate-50 rounded-lg font-medium">설계</th> <th class="p-2 bg-slate-50 rounded-lg font-medium">디자인 &amp; 개발</th> <th class="p-2 bg-slate-50 rounded-lg font-medium">QA(품질검증, 테스트)</th> <th class="p-2 bg-slate-50 rounded-lg font-medium">운영 배포</th> </tr> </thead> <tbody> <tr> <td class="p-2 text-left font-semibold text-slate-500 align-middle">R&amp;D</td> <td class="p-2 bg-slate-100 rounded-lg"></td> <td class="p-2 bg-blue-50 rounded-lg">담당자 지정<br />/ 요건 확정</td> <td class="p-2 bg-blue-50 rounded-lg">기획 확정/서비스<br />기획 확정</td> <td class="p-2 bg-blue-50 rounded-lg">개발우선순위 &amp; 일정 확정<br />→ 디자인/개발 진행</td> <td class="p-2 bg-blue-50 rounded-lg">QA 테스트 → Stage 테스트<br />→ PoC 진행</td> <td class="p-2 bg-emerald-50 rounded-lg font-medium">운영 배포<br /><span class="text-[10px] text-slate-400 font-normal">(이해관계자)</span></td> </tr> <tr> <td class="p-2 text-left font-semibold text-slate-500 align-middle">요청 부서</td> <td class="p-2 bg-rose-100 rounded-lg font-medium">Jira 티켓<br />접수</td> <td class="p-2 bg-slate-100 rounded-lg"></td> <td class="p-2 bg-blue-50 rounded-lg">요건 재확인</td> <td class="p-2 bg-blue-50 rounded-lg">확인</td> <td class="p-2 bg-blue-50 rounded-lg">(필요시) 테스트 참여</td> <td class="p-2 bg-blue-50 rounded-lg">배포 내용 확인</td> </tr> <tr> <td class="p-2 text-left font-semibold text-slate-500 align-middle">운영본부/<br />영업본부</td> <td class="p-2 bg-slate-100 rounded-lg"></td> <td class="p-2 bg-slate-100 rounded-lg"></td> <td class="p-2 bg-yellow-100 rounded-lg">기획/<br />요구사항 공유</td> <td class="p-2 bg-yellow-100 rounded-lg">일정 확인</td> <td class="p-2 bg-yellow-100 rounded-lg">테스트 매장<br />섭외 및 운영 테스트</td> <td class="p-2 bg-yellow-100 rounded-lg">실매장<br />배포 / 설치</td> </tr> </tbody> </table> </div> <div class="mt-1 bg-rose-100 text-rose-700 text-xs font-medium text-center rounded-xl py-2"> ⟲ 이슈, 개선사항, 장애 발생 시 → 요청 부서가 Jira로 다시 접수
+        </div> </div> </section> <!-- 본문: 상황별 Q&A --> <main id="content" class="max-w-4xl mx-auto px-4 py-6 space-y-3"> <p id="statusMessage" class="text-slate-500 text-center py-10">불러오는 중...</p> </main> </div> <script> // 사이드바 접기/펼치기 (localStorage로 상태 기억)
+    const MOBILE_BREAKPOINT = 768;
+    (function () {
+      const sidebar = document.getElementById('sidebar');
+      const openBtn = document.getElementById('sidebarOpenBtn');
+      const contentWrap = document.getElementById('contentWrap');
+      // 화면이 좁을 때(모바일, 작은 팝업 창)는 사이드바가 열리면 본문을 오른쪽으로 밀어서 가려지지 않게 합니다.
+      function applyMobileOffset(collapsed) {
+        const isNarrow = window.innerWidth <= MOBILE_BREAKPOINT;
+        contentWrap.style.marginLeft = (isNarrow && !collapsed) ? '176px' : '';
+      }
+      function applyState(collapsed) {
+        sidebar.classList.toggle('collapsed', collapsed);
+        openBtn.classList.toggle('hidden', !collapsed);
+        applyMobileOffset(collapsed);
+      }
+      applyState(localStorage.getItem('sidebarCollapsed') === 'true');
+      document.getElementById('sidebarToggle').addEventListener('click', () => {
+        localStorage.setItem('sidebarCollapsed', 'true');
+        applyState(true);
+      });
+      openBtn.addEventListener('click', () => {
+        localStorage.setItem('sidebarCollapsed', 'false');
+        applyState(false);
+      });
+      window.addEventListener('resize', () => {
+        applyMobileOffset(sidebar.classList.contains('collapsed'));
+      });
+    })();
+
+    // 맨 위로 스크롤 버튼
+    (function () {
+      const btn = document.getElementById('scrollTopBtn');
+      window.addEventListener('scroll', () => {
+        btn.classList.toggle('hidden', window.scrollY < 300);
+      });
+      btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    })();
+
+    function setupNavToggle(toggleId, subnavId) {
+      const subnav = document.getElementById(subnavId);
+      const btn = document.getElementById(toggleId);
+      btn.addEventListener('click', () => {
+        subnav.classList.toggle('hidden');
+        btn.textContent = subnav.classList.contains('hidden') ? '▾' : '▴';
+      });
+    }
+    setupNavToggle('evalNavToggle', 'evalSubnav');
+    setupNavToggle('glossaryNavToggle', 'glossarySubnav');
+    setupNavToggle('posNavToggle', 'posSubnav');
+    setupNavToggle('learnNavToggle', 'learnSubnav');
+
+    const SHEET_ID = '1MArCmGbnQTSVt2w8FshkKj0WsUN8pFb7PoITb2jrkdc';
+    const SHEET_NAME = '가이드';
+
+    let allData = []; // [{ situation, answer }]
+
+    function sheetUrl(sheetName) {
+      return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+    }
+
+    // RFC4180 형식의 CSV를 파싱 (따옴표, 콤마, 줄바꿈 포함 셀 지원)
+    function parseCSV(text) {
+      const rows = [];
+      let row = [];
+      let field = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const next = text[i + 1];
+
+        if (inQuotes) {
+          if (char === '"' && next === '"') {
+            field += '"';
+            i++;
+          } else if (char === '"') {
+            inQuotes = false;
+          } else {
+            field += char;
+          }
+        } else {
+          if (char === '"') {
+            inQuotes = true;
+          } else if (char === ',') {
+            row.push(field);
+            field = '';
+          } else if (char === '\n' || char === '\r') {
+            if (char === '\r' && next === '\n') i++;
+            row.push(field);
+            rows.push(row);
+            row = [];
+            field = '';
+          } else {
+            field += char;
+          }
+        }
+      }
+      if (field.length > 0 || row.length > 0) {
+        row.push(field);
+        rows.push(row);
+      }
+      return rows.filter(r => r.some(cell => cell.trim() !== ''));
+    }
+
+    async function fetchCSVGeneric(sheetName) {
+      const res = await fetch(sheetUrl(sheetName));
+      if (!res.ok) throw new Error(`"${sheetName}" 시트를 불러오지 못했습니다.`);
+      const text = await res.text();
+      return parseCSV(text);
+    }
+
+    async function loadGuide() {
+      const rows = await fetchCSVGeneric(SHEET_NAME);
+      const [header, ...body] = rows;
+
+      // 구글시트는 없는 탭 이름을 요청하면 에러 대신 첫 번째 탭 내용을 대신 돌려주는 특성이 있어,
+      // "가이드" 탭이 아직 없을 때 엉뚱한 데이터가 보이지 않도록 헤더를 한 번 확인합니다.
+      const looksLikeGuideSheet = header.some(h => ['상황', '질문'].includes(h.trim()));
+      if (!looksLikeGuideSheet) return null;
+
+      return body.map(cols => ({
+        situation: (cols[0] || '').trim(),
+        answer: (cols[1] || '').trim(),
+      })).filter(item => item.situation);
+    }
+
+    function renderGuideItem(item) {
+      return `
+        <details class="rounded-2xl border border-slate-200 bg-white p-4 group"> <summary class="font-bold text-sm cursor-pointer select-none list-none flex items-center justify-between gap-2"> <span>${escapeHtml(item.situation)}</span> <span class="text-slate-400 group-open:rotate-180 transition-transform shrink-0">▾</span> </summary> <div class="text-sm text-slate-700 leading-relaxed mt-3 pt-3 border-t border-slate-100 whitespace-pre-line">${escapeHtml(item.answer)}</div> </details> `;
+    }
+
+    function render() {
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+      const content = document.getElementById('content');
+
+      let items = allData;
+      if (query) {
+        items = items.filter(item => item.situation.toLowerCase().includes(query) ||
+          item.answer.toLowerCase().includes(query)
+        );
+      }
+
+      content.innerHTML = items.length
+        ? items.map(renderGuideItem).join('')
+        : `<p class="text-slate-500 text-center py-10">${query ? '검색 결과가 없습니다.' : '등록된 가이드가 없습니다.'}</p>`;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // 다른 페이지에서도 공통으로 쓰는 "새 소식" 확인 (공지 배너 + 사이드바 NEW 표시)
+    function daysAgoStr(n) {
+      const d = new Date();
+      d.setDate(d.getDate() - n);
+      const pad = x => String(x).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+
+    async function checkFreshness() {
+      try {
+        const rows = await fetchCSVGeneric('공지');
+        const [, ...body] = rows;
+        const parsed = body
+          .map(r => ({ id: Number((r[0] || '').trim()), date: (r[1] || '').trim() }))
+          .filter(n => !isNaN(n.id) && n.id);
+        const latest = parsed.reduce((a, b) => (a && a.id > b.id ? a : b), null);
+        const maxId = latest ? latest.id : 0;
+
+        const seenId = Number(localStorage.getItem('lastSeenNoticeId') || '0');
+        if (maxId > seenId) {
+          document.getElementById('noticeNavBadge').classList.remove('hidden');
+        }
+
+        // 공지가 등록된 당일에는 다시 방문해도(이미 확인했어도) 배너를 계속 띄웁니다.
+        const today = daysAgoStr(0);
+        const dismissedId = localStorage.getItem('dismissedBannerNoticeId');
+        if (latest && latest.date === today && dismissedId !== String(maxId)) {
+          const banner = document.getElementById('newNoticeBanner');
+          banner.classList.remove('hidden');
+          document.getElementById('dismissNoticeBanner').addEventListener('click', () => {
+            banner.classList.add('hidden');
+          });
+          document.getElementById('hideNoticeBannerToday').addEventListener('click', () => {
+            localStorage.setItem('dismissedBannerNoticeId', String(maxId));
+            banner.classList.add('hidden');
+          });
+        }
+      } catch {}
+
+      try {
+        const rows = await fetchCSVGeneric('POS 연동 현황');
+        const [, ...body] = rows;
+        const count = body.filter(r => (r[2] || '').trim()).length;
+        const seenCount = Number(localStorage.getItem('posRowCount') || '0');
+        if (count > seenCount) document.getElementById('posNavBadge').classList.remove('hidden');
+      } catch {}
+    }
+
+    async function init() {
+      try {
+        allData = await loadGuide();
+        if (allData === null) {
+          document.getElementById('content').innerHTML = `
+            <p class="text-slate-500 text-center py-10"> 아직 "가이드" 탭이 만들어지지 않았습니다.<br /> <span class="text-xs">구글 시트에 "가이드" 탭을 만들고, 첫 행에 "상황"/"답변" 컬럼을 넣어주세요.</span> </p>`;
+          return;
+        }
+        localStorage.setItem('guideRowCount', String(allData.length));
+        render();
+      } catch (err) {
+        document.getElementById('content').innerHTML = `
+          <p class="text-red-500 text-center py-10"> 데이터를 불러오지 못했습니다.<br /> 구글 시트에 "가이드" 탭이 있는지, 공유 설정이 "링크가 있는 모든 사용자 - 뷰어"로 되어 있는지 확인해주세요.<br /> <span class="text-xs text-slate-400">${escapeHtml(err.message)}</span> </p>`;
+      }
+    }
+
+    document.getElementById('searchInput').addEventListener('input', render);
+
+    (async () => {
+      await init();
+      checkFreshness();
+    })();
+  </script>
+</body>
+</html>

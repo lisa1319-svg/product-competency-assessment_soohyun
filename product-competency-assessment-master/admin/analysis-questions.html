@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>문항별 상세 분석 - t'order 역량평가 관리</title>
+  <link rel="stylesheet" href="/shared/admin-design.css">
+  <style>
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .field label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 2px;
+      font-size: var(--fs-sm);
+      color: var(--text-secondary);
+    }
+    .field.search {
+      grid-column: auto;
+    }
+    .filter-actions {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      margin-bottom: 16px;
+    }
+    .data-table tbody tr {
+      cursor: pointer;
+    }
+    .data-table tbody tr:hover {
+      background: var(--surface-sunken);
+    }
+    .data-table thead th {
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+    }
+    .data-table thead th.sortable:hover {
+      background: var(--border-subtle);
+    }
+    .sort-indicator {
+      display: inline-block;
+      margin-left: 4px;
+      font-size: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav class="sidebar" id="sidebar"></nav>
+    <header class="topbar" id="topbar"></header>
+    <main class="main">
+      <div class="content">
+        <div class="page-head">
+          <div>
+            <h1 class="page-title">문항별 상세 분석</h1>
+            <p class="page-desc">각 문항의 정답률과 응답 특성을 자세히 분석합니다.</p>
+          </div>
+        </div>
+
+        <div id="noDataState" class="empty-state" style="display:none;margin:40px 0;">
+          <div class="empty-state__icon"></div>
+          <div>아직 응시 데이터가 없습니다.</div>
+        </div>
+
+        <div id="dataSection" style="display:none;">
+          <!-- Filters -->
+          <div class="panel">
+            <div class="panel-head">
+              <h2>필터 및 검색</h2>
+            </div>
+            <div class="panel-body">
+              <div class="toolbar">
+                <div class="field">
+                  <label for="filterDomain">카테고리</label>
+                  <select id="filterDomain" class="input" data-question-filter="domain">
+                    <option value="">전체</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="filterAxis">역량축</label>
+                  <select id="filterAxis" class="input" data-question-filter="axis">
+                    <option value="">전체</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="filterTier">Tier</label>
+                  <select id="filterTier" class="input" data-question-filter="tier">
+                    <option value="">전체</option>
+                    <option value="0">Tier 0</option>
+                    <option value="1">Tier 1</option>
+                    <option value="2">Tier 2</option>
+                  </select>
+                </div>
+                <div class="field search">
+                  <label for="filterText">검색</label>
+                  <input id="filterText" type="text" class="input" data-question-search="true" placeholder="문항 텍스트...">
+                </div>
+              </div>
+              <div class="filter-actions">
+                <button class="btn btn-primary" onclick="applyFilters()">검색</button>
+                <button class="btn btn-outline" onclick="resetFilters()">초기화</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Table -->
+          <div class="panel">
+            <div class="panel-head">
+              <h2 id="resultCount">문항 목록</h2>
+            </div>
+            <div class="panel-body">
+              <div class="table-wrap">
+                <table class="data-table" id="questionsTable">
+                  <thead>
+                    <tr id="tableHeader"></tr>
+                  </thead>
+                  <tbody id="questionsBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Detail Modal -->
+  <dialog class="modal" id="detailModal">
+    <div class="modal-head">
+      <h3>문항 상세 분석</h3>
+      <button class="modal-close" onclick="document.getElementById('detailModal').close()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="detailContent"></div>
+    </div>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="/shared/config.js"></script>
+  <script src="/shared/auth.js"></script>
+  <script src="/shared/nav.js"></script>
+  <script>
+    let allQuestions = [];
+    let allAttempts = [];
+    let allAttemptsOriginal = [];
+    let questionStats = {};
+    let questionStatsOriginal = {};
+    const axisLabels = ['제품·기능 이해', '기준·용어 싱크', '업데이트 숙지', '누락 방지', '전달 가능성'];
+
+    let state = {
+      testType: '본시험',
+      sort: { key: null, dir: 'asc' }
+    };
+
+    function renderTableHeader() {
+      const headerRow = document.getElementById('tableHeader');
+      let headers = [];
+
+      if (state.testType === '본시험') {
+        headers = [
+          { key: 'qid', label: 'QID' },
+          { key: 'text', label: '문항 요약' },
+          { key: 'domain', label: '카테고리' },
+          { key: 'axis', label: '역량축' },
+          { key: 'tier', label: 'Tier' },
+          { key: 'correctRate', label: '정답률' },
+          { key: 'wrongRate', label: '오답률' },
+          { key: 'wrongCount', label: '오답자수' },
+          { key: 'avgChanges', label: '평균 변경횟수' },
+          { key: 'lateChange', label: '막판흔들림' }
+        ];
+      } else {
+        headers = [
+          { key: 'qid', label: '문항ID' },
+          { key: 'text', label: '문항요약' },
+          { key: 'originalRate', label: '본시험 정답률' },
+          { key: 'retakeRate', label: '재시험 정답률' },
+          { key: 'improvement', label: '개선폭' },
+          { key: 'remainingWrong', label: '잔여 오답자 수' },
+          { key: 'detail', label: '상세' }
+        ];
+      }
+
+      headerRow.innerHTML = headers.map(h => {
+        const isSortable = h.key !== 'text' && h.key !== 'detail';
+        const sortIndicator = state.sort.key === h.key
+          ? (state.sort.dir === 'asc' ? ' ↑' : ' ↓')
+          : '';
+        const className = isSortable ? 'sortable' : '';
+        const onclick = isSortable ? `toggleSort('${h.key}')` : '';
+        return `<th class="${className}" ${onclick ? `onclick="${onclick}"` : ''}>${h.label}${sortIndicator}</th>`;
+      }).join('');
+    }
+
+    function toggleSort(key) {
+      if (state.sort.key === key) {
+        state.sort.dir = state.sort.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.sort.key = key;
+        state.sort.dir = 'asc';
+      }
+      applyFilters();
+    }
+
+    (async () => {
+      const auth = await AUTH.requirePage({admin:true});
+      if (!auth) return;
+
+      const { data: roundsData } = await AUTH.sb.from('exam_rounds').select('id,label,active').order('created_at',{ascending:false});
+      const rounds = roundsData || [];
+      const params = new URLSearchParams(location.search);
+      let activeRoundId = params.get('round');
+      if (!activeRoundId) {
+        const a = rounds.find(r=>r.active);
+        activeRoundId = a ? a.id : (rounds[0] && rounds[0].id);
+      }
+      const activeExamType = params.get('examType') === '재시험' ? '재시험' : '본시험';
+      state.testType = activeExamType;
+
+      renderAdminShell({
+        role: auth.role,
+        current: '/admin/analysis-questions.html',
+        email: auth.email,
+        rounds,
+        activeRoundId,
+        examType: activeExamType,
+        showExamTypeToggle: true,
+        onRoundChange: (id) => { location.href = location.pathname + '?round=' + id + '&examType=' + encodeURIComponent(state.testType) },
+        onExamTypeChange: (type) => {
+          state.testType = type;
+          state.sort = { key: null, dir: 'asc' };
+          location.href = location.pathname + '?round=' + activeRoundId + '&examType=' + encodeURIComponent(type);
+        }
+      });
+
+      if (!activeRoundId) {
+        document.getElementById('noDataState').style.display = 'flex';
+        return;
+      }
+
+      // 재시험 데이터 로드
+      const { data: attemptsData } = await AUTH.sb.from('exam_attempts').select('*').eq('round_id', activeRoundId).eq('is_retake', activeExamType === '재시험');
+      const rawAttempts = attemptsData || [];
+
+      const latestAttempts = {};
+      for (const att of rawAttempts) {
+        if (!att.submitted_at) continue;
+        const key = att.user_email;
+        if (!latestAttempts[key] || new Date(att.created_at) > new Date(latestAttempts[key].created_at)) {
+          latestAttempts[key] = att;
+        }
+      }
+      allAttempts = Object.values(latestAttempts);
+
+      // 재시험 모드일 때: 본시험 데이터도 필요
+      if (activeExamType === '재시험') {
+        const { data: originalData } = await AUTH.sb.from('exam_attempts').select('*').eq('round_id', activeRoundId).eq('is_retake', false);
+        const rawOriginal = originalData || [];
+        const latestOriginal = {};
+        for (const att of rawOriginal) {
+          if (!att.submitted_at) continue;
+          const key = att.user_email;
+          if (!latestOriginal[key] || new Date(att.created_at) > new Date(latestOriginal[key].created_at)) {
+            latestOriginal[key] = att;
+          }
+        }
+        allAttemptsOriginal = Object.values(latestOriginal);
+      }
+
+      if (allAttempts.length === 0) {
+        document.getElementById('noDataState').style.display = 'flex';
+        return;
+      }
+
+      const { data: questionsData } = await AUTH.sb.from('questions').select('*');
+      allQuestions = questionsData || [];
+
+      // Calculate stats per question for current test type
+      for (const q of allQuestions) {
+        let correct = 0, total = 0, wrongPeople = new Set(), lateChangeCount = 0, totalChanges = 0;
+        for (const att of allAttempts) {
+          const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+          if (answers[q.id]) {
+            total++;
+            if (answers[q.id].correct) {
+              correct++;
+            } else {
+              wrongPeople.add(att.user_email);
+            }
+            totalChanges += answers[q.id].changes || 0;
+            if (answers[q.id].late_change) lateChangeCount++;
+          }
+        }
+        questionStats[q.id] = {
+          correct,
+          total,
+          wrongPeople,
+          lateChangeCount,
+          totalChanges
+        };
+      }
+
+      // Calculate stats for original test (for retake mode comparison)
+      if (activeExamType === '재시험') {
+        for (const q of allQuestions) {
+          let correct = 0, total = 0, wrongPeople = new Set();
+          for (const att of allAttemptsOriginal) {
+            const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+            if (answers[q.id]) {
+              total++;
+              if (answers[q.id].correct) {
+                correct++;
+              } else {
+                wrongPeople.add(att.user_email);
+              }
+            }
+          }
+          questionStatsOriginal[q.id] = {
+            correct,
+            total,
+            wrongPeople
+          };
+        }
+      }
+
+      // Setup filters
+      const domains = [...new Set(allQuestions.map(q => q.domain).filter(Boolean))].sort();
+      const axes = [...new Set(allQuestions.map(q => q.axis).filter(Boolean))].sort();
+
+      const domainSelect = document.getElementById('filterDomain');
+      for (const d of domains) {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = d;
+        domainSelect.appendChild(opt);
+      }
+
+      const axisSelect = document.getElementById('filterAxis');
+      for (const a of axes) {
+        const opt = document.createElement('option');
+        opt.value = a;
+        opt.textContent = axisLabels[a - 1] || ('역량' + a);
+        axisSelect.appendChild(opt);
+      }
+
+      renderTableHeader();
+      document.getElementById('dataSection').style.display = 'block';
+      applyFilters();
+    })();
+
+    function applyFilters() {
+      const domain = document.getElementById('filterDomain').value;
+      const axis = document.getElementById('filterAxis').value;
+      const tier = document.getElementById('filterTier').value;
+      const text = document.getElementById('filterText').value.toLowerCase();
+
+      let filtered = allQuestions.filter(q => {
+        if (domain && q.domain !== domain) return false;
+        if (axis && q.axis != axis) return false;
+        if (tier !== '' && q.tier != tier) return false;
+        if (text && !q.question_text.toLowerCase().includes(text)) return false;
+        return true;
+      });
+
+      // Apply sorting
+      if (state.sort.key) {
+        filtered.sort((a, b) => {
+          let aVal, bVal;
+
+          if (state.testType === '본시험') {
+            const statsA = questionStats[a.id] || { correct: 0, total: 0, wrongPeople: new Set(), lateChangeCount: 0, totalChanges: 0 };
+            const statsB = questionStats[b.id] || { correct: 0, total: 0, wrongPeople: new Set(), lateChangeCount: 0, totalChanges: 0 };
+
+            switch (state.sort.key) {
+              case 'qid': aVal = a.qid || ''; bVal = b.qid || ''; break;
+              case 'correctRate':
+                aVal = statsA.total > 0 ? (statsA.correct / statsA.total) : 0;
+                bVal = statsB.total > 0 ? (statsB.correct / statsB.total) : 0;
+                break;
+              default: aVal = ''; bVal = '';
+            }
+          } else {
+            const statsA = questionStats[a.id] || { correct: 0, total: 0, wrongPeople: new Set() };
+            const statsB = questionStats[b.id] || { correct: 0, total: 0, wrongPeople: new Set() };
+            const statsAOrig = questionStatsOriginal[a.id] || { correct: 0, total: 0, wrongPeople: new Set() };
+            const statsBOrig = questionStatsOriginal[b.id] || { correct: 0, total: 0, wrongPeople: new Set() };
+
+            switch (state.sort.key) {
+              case 'qid': aVal = a.qid || ''; bVal = b.qid || ''; break;
+              case 'originalRate':
+                aVal = statsAOrig.total > 0 ? (statsAOrig.correct / statsAOrig.total) : 0;
+                bVal = statsBOrig.total > 0 ? (statsBOrig.correct / statsBOrig.total) : 0;
+                break;
+              case 'retakeRate':
+                aVal = statsA.total > 0 ? (statsA.correct / statsA.total) : 0;
+                bVal = statsB.total > 0 ? (statsB.correct / statsB.total) : 0;
+                break;
+              case 'improvement':
+                const origA = statsAOrig.total > 0 ? (statsAOrig.correct / statsAOrig.total) : 0;
+                const origB = statsBOrig.total > 0 ? (statsBOrig.correct / statsBOrig.total) : 0;
+                const retakeA = statsA.total > 0 ? (statsA.correct / statsA.total) : 0;
+                const retakeB = statsB.total > 0 ? (statsB.correct / statsB.total) : 0;
+                aVal = retakeA - origA;
+                bVal = retakeB - origB;
+                break;
+              default: aVal = ''; bVal = '';
+            }
+          }
+
+          if (typeof aVal === 'string') {
+            return state.sort.dir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+          } else {
+            return state.sort.dir === 'asc' ? aVal - bVal : bVal - aVal;
+          }
+        });
+      }
+
+      document.getElementById('resultCount').textContent = `문항 목록 (${filtered.length}건)`;
+
+      const tbody = document.getElementById('questionsBody');
+      tbody.innerHTML = filtered.map(q => {
+        if (state.testType === '본시험') {
+          const stat = questionStats[q.id] || { correct: 0, total: 0, wrongPeople: new Set(), lateChangeCount: 0, totalChanges: 0 };
+          const correctRate = stat.total > 0 ? Math.round((stat.correct / stat.total) * 100) : 0;
+          const wrongRate = 100 - correctRate;
+          const avgChanges = stat.total > 0 ? (stat.totalChanges / stat.total).toFixed(1) : 0;
+          const lateChangeRate = stat.total > 0 ? Math.round((stat.lateChangeCount / stat.total) * 100) : 0;
+
+          return `<tr onclick="showDetail('${q.id}')">
+            <td>${q.qid || '-'}</td>
+            <td style="max-width:200px;white-space:normal;">${q.question_text.substring(0,80)}...</td>
+            <td>${q.domain || '-'}</td>
+            <td>${q.axis ? (axisLabels[q.axis - 1] || '역량' + q.axis) : '-'}</td>
+            <td>Tier ${q.tier || '-'}</td>
+            <td>${correctRate}%</td>
+            <td>${wrongRate}%</td>
+            <td>${stat.wrongPeople.size}</td>
+            <td>${avgChanges}</td>
+            <td>${lateChangeRate}%</td>
+          </tr>`;
+        } else {
+          const statRetake = questionStats[q.id] || { correct: 0, total: 0, wrongPeople: new Set() };
+          const statOriginal = questionStatsOriginal[q.id] || { correct: 0, total: 0, wrongPeople: new Set() };
+
+          const originalRate = statOriginal.total > 0 ? Math.round((statOriginal.correct / statOriginal.total) * 100) : 0;
+          const retakeRate = statRetake.total > 0 ? Math.round((statRetake.correct / statRetake.total) * 100) : 0;
+          const improvement = retakeRate - originalRate;
+          const improvementStr = improvement >= 0 ? `+${improvement}` : `${improvement}`;
+          const remainingWrong = statRetake.wrongPeople.size;
+
+          return `<tr onclick="showDetail('${q.id}')">
+            <td>${q.qid || '-'}</td>
+            <td style="max-width:200px;white-space:normal;">${q.question_text.substring(0,80)}...</td>
+            <td>${originalRate}%</td>
+            <td>${retakeRate}%</td>
+            <td>${improvementStr}%</td>
+            <td>${remainingWrong}</td>
+            <td><a href="#" style="color:var(--accent);font-weight:600;">보기</a></td>
+          </tr>`;
+        }
+      }).join('');
+    }
+
+    function resetFilters() {
+      document.getElementById('filterDomain').value = '';
+      document.getElementById('filterAxis').value = '';
+      document.getElementById('filterTier').value = '';
+      document.getElementById('filterText').value = '';
+      state.sort = { key: null, dir: 'asc' };
+      renderTableHeader();
+      applyFilters();
+    }
+
+    function showDetail(qid) {
+      const q = allQuestions.find(x => x.id === qid);
+      if (!q) return;
+
+      const stat = questionStats[qid];
+      const correctRate = stat.total > 0 ? Math.round((stat.correct / stat.total) * 100) : 0;
+
+      // Option selection distribution
+      const optionStats = {};
+      const options = q.options || [];
+      for (let i = 0; i < options.length; i++) {
+        optionStats[i] = { count: 0, tag: (q.option_tags && q.option_tags[i]) || '' };
+      }
+
+      const attemptsToUse = state.testType === '본시험' ? allAttempts : allAttempts;
+      for (const att of attemptsToUse) {
+        const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+        if (answers[qid]) {
+          const sel = answers[qid].selected;
+          if (sel !== null && sel !== undefined && optionStats[sel]) {
+            optionStats[sel].count++;
+          }
+        }
+      }
+
+      let html = `
+        <div style="margin-bottom:16px;">
+          <h4 style="margin:0 0 8px;font-weight:600;">문항</h4>
+          <p>${q.question_text}</p>
+        </div>
+        <div style="margin-bottom:16px;">
+          <h4 style="margin:0 0 8px;font-weight:600;">선택 분포</h4>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            ${options.map((opt, i) => {
+              const count = optionStats[i].count;
+              const pct = stat.total > 0 ? Math.round((count / stat.total) * 100) : 0;
+              const isCorrect = i === q.correct_index;
+              return `<div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                  <span style="font-size:var(--fs-sm);">${String.fromCharCode(65+i)}) ${opt} ${isCorrect ? '✓ 정답' : ''}</span>
+                  <span style="font-size:var(--fs-xs);color:var(--text-tertiary);">${count}명 (${pct}%)</span>
+                </div>
+                <div style="height:6px;background:var(--border-subtle);border-radius:3px;overflow:hidden;">
+                  <div style="height:100%;background:${isCorrect ? '#09B836' : '#246FF4'};width:${pct}%;"></div>
+                </div>
+                ${optionStats[i].tag ? `<div style="font-size:var(--fs-xs);color:var(--text-tertiary);margin-top:2px;">${optionStats[i].tag}</div>` : ''}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+        <div style="margin-bottom:16px;">
+          <h4 style="margin:0 0 8px;font-weight:600;">통계</h4>
+          <div style="font-size:var(--fs-sm);line-height:1.8;">
+      `;
+
+      if (state.testType === '본시험') {
+        html += `
+            <div>정답률: ${correctRate}%</div>
+            <div>응시인원: ${stat.total}</div>
+            <div>오답자: ${stat.wrongPeople.size}</div>
+            <div>평균 변경횟수: ${stat.total > 0 ? (stat.totalChanges / stat.total).toFixed(1) : 0}</div>
+            <div>막판흔들림: ${stat.total > 0 ? Math.round((stat.lateChangeCount / stat.total) * 100) : 0}%</div>
+        `;
+      } else {
+        const statOrig = questionStatsOriginal[qid];
+        const origRate = statOrig.total > 0 ? Math.round((statOrig.correct / statOrig.total) * 100) : 0;
+        const improvement = correctRate - origRate;
+        html += `
+            <div>본시험 정답률: ${origRate}%</div>
+            <div>재시험 정답률: ${correctRate}%</div>
+            <div>개선폭: ${improvement >= 0 ? '+' : ''}${improvement}%</div>
+            <div>본시험 오답자: ${statOrig.wrongPeople.size}</div>
+            <div>재시험 오답자: ${stat.wrongPeople.size}</div>
+        `;
+      }
+
+      html += `
+          </div>
+        </div>
+        <div>
+          <h4 style="margin:0 0 8px;font-weight:600;">오답자 이메일</h4>
+          <div style="font-size:var(--fs-xs);max-height:120px;overflow-y:auto;background:var(--surface-sunken);padding:8px;border-radius:var(--radius-sm);word-break:break-all;">
+            ${Array.from(stat.wrongPeople).slice(0, 10).join(', ')}${stat.wrongPeople.size > 10 ? ' 외 ' + (stat.wrongPeople.size - 10) + '명' : ''}
+          </div>
+        </div>
+      `;
+
+      document.getElementById('detailContent').innerHTML = html;
+      document.getElementById('detailModal').showModal();
+    }
+  </script>
+</body>
+</html>

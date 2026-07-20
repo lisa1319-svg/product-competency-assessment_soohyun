@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>최종 결과</title>
+<link rel="stylesheet" href="/shared/admin-design.css">
+</head>
+<body>
+<div class="shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <header class="topbar" id="topbar"></header>
+  <main class="main"><div class="content">
+    <div class="page-head"><div>
+      <h1 class="page-title">최종 결과</h1>
+      <p class="page-desc">본시험과 재시험을 합산한 최종 합격 여부 확인</p>
+    </div></div>
+    <div id="results-container"></div>
+  </div></main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/shared/config.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/shared/nav.js"></script>
+<script>
+let currentRound = null
+let allAttempts = []
+let allEmployees = []
+
+async function init() {
+  const auth = await AUTH.requirePage({admin: true})
+  if (!auth) return
+
+  // Load rounds
+  const {data: rounds} = await AUTH.sb.from('exam_rounds').select('*').order('created_at', {ascending: false})
+  if (!rounds || rounds.length === 0) {
+    document.getElementById('results-container').innerHTML = '<div class="empty-state"><p>평가 회차가 없습니다.</p></div>'
+    renderAdminShell({role: auth.role, current: '/admin/final-results.html', email: auth.email, rounds: [], sidebarMount: 'sidebar', topbarMount: 'topbar'})
+    return
+  }
+
+  // Check URL param for round selection
+  const urlParams = new URLSearchParams(window.location.search)
+  let activeRoundId = urlParams.get('round')
+  if (!activeRoundId || !rounds.find(r => r.id === activeRoundId)) {
+    activeRoundId = rounds[0].id
+  }
+  currentRound = rounds.find(r => r.id === activeRoundId)
+
+  renderAdminShell({
+    role: auth.role,
+    current: '/admin/final-results.html',
+    email: auth.email,
+    rounds: rounds,
+    activeRoundId: activeRoundId,
+    onRoundChange: (roundId) => {
+      location.href = `/admin/final-results.html?round=${roundId}`
+    },
+    sidebarMount: 'sidebar',
+    topbarMount: 'topbar'
+  })
+
+  // Load data
+  await loadEmployees()
+  await loadAttempts(activeRoundId)
+  renderResults()
+}
+
+async function loadEmployees() {
+  const {data} = await AUTH.sb.from('employees').select('*').eq('status', '재직')
+  allEmployees = data || []
+}
+
+async function loadAttempts(roundId) {
+  const {data} = await AUTH.sb.from('exam_attempts').select('*').eq('round_id', roundId)
+  allAttempts = data || []
+}
+
+function renderResults() {
+  if (!allAttempts.length) {
+    document.getElementById('results-container').innerHTML = '<div class="empty-state"><p>아직 응시 데이터가 없습니다.</p></div>'
+    return
+  }
+
+  // Group by email and compute final result
+  const resultsByEmail = {}
+  allAttempts.forEach(att => {
+    if (!resultsByEmail[att.user_email]) {
+      resultsByEmail[att.user_email] = {
+        email: att.user_email,
+        firstAttempt: null,
+        retakeAttempt: null
+      }
+    }
+    if (!att.is_retake && !resultsByEmail[att.user_email].firstAttempt) {
+      resultsByEmail[att.user_email].firstAttempt = att
+    } else if (att.is_retake && !resultsByEmail[att.user_email].retakeAttempt) {
+      resultsByEmail[att.user_email].retakeAttempt = att
+    }
+  })
+
+  // Compute final status
+  const results = Object.values(resultsByEmail).map(r => {
+    const emp = allEmployees.find(e => e.email === r.email)
+    const firstName = r.firstAttempt?.score || 0
+    const retakeName = r.retakeAttempt?.score !== undefined ? r.retakeAttempt.score : null
+    const scoreDiff = retakeName !== null ? retakeName - firstName : null
+
+    let finalStatus, statusBadgeClass, actionLabel, actionHref
+    if (r.firstAttempt?.passed) {
+      finalStatus = '합격'
+      statusBadgeClass = 'badge--success'
+      actionLabel = '완료'
+      actionHref = null
+    } else if (r.retakeAttempt) {
+      finalStatus = r.retakeAttempt.passed ? '합격(재)' : '불합격'
+      statusBadgeClass = r.retakeAttempt.passed ? 'badge--success' : 'badge--danger'
+      actionLabel = '완료'
+      actionHref = null
+    } else {
+      finalStatus = '미정(재시험 대기)'
+      statusBadgeClass = 'badge--warning'
+      actionLabel = '재시험 관리'
+      actionHref = '/admin/retake.html'
+    }
+
+    return {
+      name: emp?.name || r.email,
+      team: emp?.team || '-',
+      firstScore: firstName,
+      retakeScore: retakeName,
+      scoreDiff: scoreDiff,
+      finalStatus: finalStatus,
+      statusBadgeClass: statusBadgeClass,
+      actionLabel: actionLabel,
+      actionHref: actionHref
+    }
+  })
+
+  // Sort by name
+  results.sort((a, b) => a.name.localeCompare(b.name))
+
+  const html = `
+    <div class="panel">
+      <div class="panel-head">
+        <h2>최종 결과 현황</h2>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>이름</th>
+              <th>팀</th>
+              <th style="text-align:right;">본시험 점수</th>
+              <th style="text-align:right;">재시험 점수</th>
+              <th style="text-align:right;">변화</th>
+              <th>최종 합격</th>
+              <th>후속조치</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${results.map(r => `
+              <tr>
+                <td>${r.name}</td>
+                <td>${r.team}</td>
+                <td style="text-align:right;">${r.firstScore}</td>
+                <td style="text-align:right;">${r.retakeScore !== null ? r.retakeScore : '—'}</td>
+                <td style="text-align:right;">${r.scoreDiff !== null ? (r.scoreDiff > 0 ? '+' : '') + r.scoreDiff : '—'}</td>
+                <td><span class="badge ${r.statusBadgeClass}">${r.finalStatus}</span></td>
+                <td>${r.actionHref ? `<a href="${r.actionHref}" style="color:var(--accent);font-weight:600;text-decoration:none;">${r.actionLabel}</a>` : r.actionLabel}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `
+
+  document.getElementById('results-container').innerHTML = html
+}
+
+window.__onAdminRoundChange = (roundId) => {
+  location.href = `/admin/final-results.html?round=${roundId}`
+}
+
+init()
+</script>
+</body>
+</html>

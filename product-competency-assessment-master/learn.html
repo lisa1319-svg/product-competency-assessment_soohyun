@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>t'order 가이드 - 학습글</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/shared/config.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/shared/track.js"></script>
+<script src="/shared/learn-posts-data.js"></script>
+<style>
+  html, body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  #sidebar {
+    width: 176px;
+    transition: width 0.15s ease;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 30;
+  }
+  #sidebar.collapsed { width: 0; overflow: hidden; border-right: none; }
+  #contentWrap { transition: margin-left 0.15s ease; }
+  .glossary-subnav.hidden { display: none; }
+  .board-row:hover { background: #f8fafc; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen" style="visibility:hidden">
+<script>(function(){ AUTH.requirePage().then(function(u){ if(u){ logMaterialView('learn'); document.body.style.visibility='visible'; var el=document.getElementById('userEmailLabel'); if(el) el.textContent=u.email; var adminLink=document.getElementById('adminEntryLink'); if(adminLink && u.role && u.role!=='test_taker') adminLink.classList.remove('hidden'); } }); })();</script>
+<aside id="sidebar" class="bg-white border-r border-slate-200 flex flex-col">
+  <div class="p-3 flex items-center justify-between gap-2 border-b border-slate-100">
+    <img src="/shared/logo-dark-text.png" alt="t'order" class="h-4 w-auto">
+    <button id="sidebarToggle" type="button" class="w-6 h-6 shrink-0 flex items-center justify-center rounded-full text-xs text-slate-400 bg-slate-100 hover:bg-slate-200" aria-label="사이드바 접기">◀</button>
+  </div>
+  <nav class="flex-1 px-2 py-3 space-y-1 text-sm overflow-y-auto">
+    <div>
+      <div class="flex items-center rounded-xl hover:bg-slate-100">
+        <a href="exam.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">역량 평가</a>
+        <button type="button" id="evalNavToggle" class="eval-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 메뉴 펼치기">▾</button>
+      </div>
+      <div id="evalSubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs">
+        <a href="exam.html" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">평가</a>
+        <a href="study.html" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">학습 자료</a>
+      </div>
+    </div>
+    <div>
+      <div class="flex items-center rounded-xl hover:bg-slate-100">
+        <a href="v2.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">용어집</a>
+        <button type="button" id="glossaryNavToggle" class="glossary-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 카테고리 펼치기">▾</button>
+      </div>
+      <div id="glossarySubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs">
+        <a href="v2.html?cat=전체" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">전체</a>
+        <a href="v2.html?cat=제품 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">제품 용어</a>
+        <a href="v2.html?cat=추가 기능 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">추가 기능 용어</a>
+        <a href="v2.html?cat=UX 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">UX 용어</a>
+        <a href="v2.html?cat=IT 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">IT 용어</a>
+        <a href="v2.html?cat=종료 및 변경" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">종료 및 변경</a>
+      </div>
+    </div>
+    <a href="notice.html" class="flex items-center justify-between px-2.5 py-2 rounded-xl font-medium text-slate-600 hover:bg-slate-100 whitespace-nowrap">공지 <span id="noticeNavBadge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] align-middle">NEW</span></a>
+    <div>
+      <div class="flex items-center rounded-xl bg-slate-800">
+        <a href="learn.html" class="flex-1 px-2.5 py-2 font-medium text-white whitespace-nowrap">학습글</a>
+        <button type="button" id="learnNavToggle" class="learn-nav-toggle px-2 text-white/70 hover:text-white text-xs" aria-label="하위 카테고리 펼치기">▴</button>
+      </div>
+      <div id="learnSubnav" class="glossary-subnav pl-2.5 space-y-0.5 mt-1 text-xs">
+        <a data-cat="전체" href="learn.html?cat=전체" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">전체</a>
+        <a data-cat="티오더AI" href="learn.html?cat=티오더AI" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">티오더AI</a>
+        <a data-cat="어드민" href="learn.html?cat=어드민" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">어드민</a>
+        <a data-cat="POS연동" href="learn.html?cat=POS연동" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">POS·외부연동</a>
+      </div>
+    </div>
+    <div>
+      <div class="flex items-center rounded-xl hover:bg-slate-100">
+        <a href="pos.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">POS <span id="posNavBadge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] align-middle">NEW</span></a>
+        <button type="button" id="posNavToggle" class="pos-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 지역 펼치기">▾</button>
+      </div>
+      <div id="posSubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs">
+        <a href="pos.html?region=전체" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">전체</a>
+        <a href="pos.html?region=국내" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">국내</a>
+        <a href="pos.html?region=해외" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">해외</a>
+        <a href="pos.html?mode=compare" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">비교</a>
+      </div>
+    </div>
+    <a href="guide.html" class="hidden flex items-center justify-between px-2.5 py-2 rounded-xl font-medium text-slate-600 hover:bg-slate-100 whitespace-nowrap">가이드 <span id="guideNavBadge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] align-middle">NEW</span></a>
+    <a href="/admin/dashboard.html" id="adminEntryLink" class="hidden flex items-center gap-1.5 px-2.5 py-2 rounded-xl font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 whitespace-nowrap">관리자 콘솔</a>
+  </nav>
+  <div class="p-3 border-t border-slate-100 text-xs text-slate-400 flex items-center justify-between gap-2">
+    <span id="userEmailLabel" class="truncate"></span>
+    <button onclick="AUTH.signOut()" class="text-slate-400 hover:text-rose-500 shrink-0">로그아웃</button>
+  </div>
+</aside>
+<button id="sidebarOpenBtn" type="button" class="hidden fixed top-4 left-4 z-20 w-7 h-7 flex items-center justify-center bg-white border border-slate-200 rounded-full shadow-sm text-slate-400 hover:bg-slate-50 text-xs" aria-label="사이드바 펼치기">▶</button>
+<button id="scrollTopBtn" type="button" class="hidden fixed bottom-6 right-6 z-20 w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-full shadow-md text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition" aria-label="맨 위로">↑</button>
+<div id="contentWrap" class="min-h-screen">
+  <header class="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
+    <div class="max-w-4xl mx-auto px-4 py-4">
+      <h2 class="text-lg font-bold mb-2">학습글</h2>
+      <input id="searchInput" type="text" placeholder="제목으로 검색..." class="w-full px-4 py-2 rounded-full border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400" />
+    </div>
+  </header>
+  <main class="max-w-4xl mx-auto px-4 py-6">
+    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-slate-200 bg-slate-50 text-slate-500 text-xs">
+            <th class="px-4 py-2.5 text-left w-16">번호</th>
+            <th class="px-4 py-2.5 text-left w-24">카테고리</th>
+            <th class="px-4 py-2.5 text-left">제목</th>
+            <th class="px-4 py-2.5 text-left w-24">날짜</th>
+          </tr>
+        </thead>
+        <tbody id="boardBody"></tbody>
+      </table>
+      <p id="emptyMessage" class="hidden text-slate-500 text-center py-10">글이 없습니다.</p>
+    </div>
+  </main>
+</div>
+<script>
+    const MOBILE_BREAKPOINT = 768;
+    (function () {
+      const sidebar = document.getElementById('sidebar');
+      const openBtn = document.getElementById('sidebarOpenBtn');
+      const contentWrap = document.getElementById('contentWrap');
+      function applyMobileOffset(collapsed) {
+        const isNarrow = window.innerWidth <= MOBILE_BREAKPOINT;
+        contentWrap.style.marginLeft = (isNarrow && !collapsed) ? '176px' : '';
+      }
+      function applyState(collapsed) {
+        sidebar.classList.toggle('collapsed', collapsed);
+        openBtn.classList.toggle('hidden', !collapsed);
+        applyMobileOffset(collapsed);
+      }
+      applyState(localStorage.getItem('sidebarCollapsed') === 'true');
+      document.getElementById('sidebarToggle').addEventListener('click', () => {
+        localStorage.setItem('sidebarCollapsed', 'true');
+        applyState(true);
+      });
+      openBtn.addEventListener('click', () => {
+        localStorage.setItem('sidebarCollapsed', 'false');
+        applyState(false);
+      });
+      window.addEventListener('resize', () => {
+        applyMobileOffset(sidebar.classList.contains('collapsed'));
+      });
+    })();
+
+    (function () {
+      const btn = document.getElementById('scrollTopBtn');
+      window.addEventListener('scroll', () => {
+        btn.classList.toggle('hidden', window.scrollY < 300);
+      });
+      btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    })();
+
+    function setupNavToggle(toggleId, subnavId) {
+      const subnav = document.getElementById(subnavId);
+      const btn = document.getElementById(toggleId);
+      btn.addEventListener('click', () => {
+        subnav.classList.toggle('hidden');
+        btn.textContent = subnav.classList.contains('hidden') ? '▾' : '▴';
+      });
+    }
+    setupNavToggle('evalNavToggle', 'evalSubnav');
+    setupNavToggle('glossaryNavToggle', 'glossarySubnav');
+    setupNavToggle('posNavToggle', 'posSubnav');
+    setupNavToggle('learnNavToggle', 'learnSubnav');
+
+    const CATEGORIES = ['티오더AI', '어드민', 'POS연동'];
+    let activeCategory = '전체';
+
+    function updateLearnSubnavActive() {
+      document.querySelectorAll('#learnSubnav a').forEach(a => {
+        const isActive = a.dataset.cat === activeCategory;
+        a.classList.toggle('bg-slate-800', isActive);
+        a.classList.toggle('text-white', isActive);
+        a.classList.toggle('text-slate-500', !isActive);
+        a.classList.toggle('hover:bg-slate-100', !isActive);
+      });
+    }
+
+    document.querySelectorAll('#learnSubnav a').forEach(a => {
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        activeCategory = a.dataset.cat;
+        document.getElementById('searchInput').value = '';
+        updateLearnSubnavActive();
+        render();
+        history.replaceState(null, '', a.getAttribute('href'));
+      });
+    });
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // 네이버 카페식 게시판 목록. 제목을 누르면 실제 게시글 HTML 파일(post.url)로 바로 이동한다.
+    function renderRow(post, num) {
+      return `
+        <tr class="board-row border-b border-slate-100 last:border-0 cursor-pointer" data-url="${escapeHtml(post.url)}">
+          <td class="px-4 py-3 text-slate-400">${num}</td>
+          <td class="px-4 py-3"><span class="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 whitespace-nowrap">${escapeHtml(post.category)}</span></td>
+          <td class="px-4 py-3 font-medium text-slate-900">${escapeHtml(post.title)}</td>
+          <td class="px-4 py-3 text-slate-400">${escapeHtml(post.date || '')}</td>
+        </tr>`;
+    }
+
+    function render() {
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+      let items = LEARN_POSTS.slice();
+      if (activeCategory !== '전체') items = items.filter(p => p.category === activeCategory);
+      if (query) items = items.filter(p => p.title.toLowerCase().includes(query));
+
+      const tbody = document.getElementById('boardBody');
+      const emptyMessage = document.getElementById('emptyMessage');
+      tbody.innerHTML = items.map((p, i) => renderRow(p, items.length - i)).join('');
+      emptyMessage.classList.toggle('hidden', items.length > 0);
+
+      tbody.querySelectorAll('.board-row').forEach(row => {
+        row.addEventListener('click', () => { location.href = row.dataset.url; });
+      });
+    }
+
+    function init() {
+      const params = new URLSearchParams(location.search);
+      const presetCat = params.get('cat');
+      if (presetCat && (presetCat === '전체' || CATEGORIES.includes(presetCat))) {
+        activeCategory = presetCat;
+      }
+      updateLearnSubnavActive();
+      render();
+    }
+
+    document.getElementById('searchInput').addEventListener('input', () => render());
+
+    init();
+  </script>
+</body>
+</html>

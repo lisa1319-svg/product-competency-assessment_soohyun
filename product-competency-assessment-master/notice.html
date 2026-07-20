@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>t'order 가이드 - 공지</title> <!-- Pretendard 웹폰트 -->
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" /> <!-- Tailwind CSS (CDN) -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/shared/config.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/shared/track.js"></script> <style> html, body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  .rich-content ul, .rich-content ol { padding-left: 1.25rem; }
+  .rich-content ul li, .rich-content ol li { margin: 0.15rem 0; }
+
+  /* 글머리 기호: 1단계 ● / 2단계 ○ / 3단계 ■ / 이후 반복 */
+  .rich-content ul { list-style-type: disc; }
+  .rich-content ul ul { list-style-type: circle; }
+  .rich-content ul ul ul { list-style-type: square; }
+  .rich-content ul ul ul ul { list-style-type: disc; }
+
+  /* 번호 매기기: 1단계 1. / 2단계 1) / 3단계 ① / 이후 반복 */
+  @counter-style paren-decimal {
+    system: numeric;
+    symbols: "0" "1" "2" "3" "4" "5" "6" "7" "8" "9";
+    suffix: ") ";
+  }
+  @counter-style circled-decimal {
+    system: cyclic;
+    symbols: "①" "②" "③" "④" "⑤" "⑥" "⑦" "⑧" "⑨" "⑩" "⑪" "⑫" "⑬" "⑭" "⑮" "⑯" "⑰" "⑱" "⑲" "⑳";
+    suffix: " ";
+  }
+  .rich-content ol { list-style-type: decimal; }
+  .rich-content ol ol { list-style-type: paren-decimal; }
+  .rich-content ol ol ol { list-style-type: circled-decimal; }
+  .rich-content ol ol ol ol { list-style-type: decimal; }
+
+  .rich-content a { color: #3b82f6; text-decoration: underline; }
+  .inline-term-highlight {
+    text-decoration: underline dotted #94a3b8;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+  .inline-term-highlight:hover { color: #1d4ed8; }
+  #contentEditor:empty:before {
+    content: attr(data-placeholder);
+    color: #94a3b8;
+  }
+  #sidebar {
+    width: 176px;
+    transition: width 0.15s ease;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 30;
+  }
+  #sidebar.collapsed { width: 0; overflow: hidden; border-right: none; }
+  #contentWrap { transition: margin-left 0.15s ease; }
+  .glossary-subnav.hidden { display: none; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen" style="visibility:hidden">
+<script>(function(){ AUTH.requirePage().then(function(u){ if(u){ logMaterialView('notice'); document.body.style.visibility='visible'; var el=document.getElementById('userEmailLabel'); if(el) el.textContent=u.email; var adminLink=document.getElementById('adminEntryLink'); if(adminLink && u.role && u.role!=='test_taker') adminLink.classList.remove('hidden'); } }); })();</script> <!-- 사이드바 (화면에 고정되어 떠 있으며, 본문 레이아웃에 영향을 주지 않습니다) --> <aside id="sidebar" class="bg-white border-r border-slate-200 flex flex-col"> <div class="p-3 flex items-center justify-between gap-2 border-b border-slate-100"> <img src="/shared/logo-dark-text.png" alt="t'order" class="h-4 w-auto"> <button id="sidebarToggle" type="button" class="w-6 h-6 shrink-0 flex items-center justify-center rounded-full text-xs text-slate-400 bg-slate-100 hover:bg-slate-200" aria-label="사이드바 접기">◀</button> </div> <nav class="flex-1 px-2 py-3 space-y-1 text-sm overflow-y-auto"> <div> <div class="flex items-center rounded-xl hover:bg-slate-100"> <a href="exam.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">역량 평가</a> <button type="button" id="evalNavToggle" class="eval-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 메뉴 펼치기">▾</button> </div> <div id="evalSubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs"> <a href="exam.html" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">평가</a> <a href="study.html" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">학습 자료</a> </div> </div> <div> <div class="flex items-center rounded-xl hover:bg-slate-100"> <a href="v2.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">용어집</a> <button type="button" id="glossaryNavToggle" class="glossary-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 카테고리 펼치기">▾</button> </div> <div id="glossarySubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs"> <a href="v2.html?cat=전체" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">전체</a> <a href="v2.html?cat=제품 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">제품 용어</a> <a href="v2.html?cat=추가 기능 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">추가 기능 용어</a> <a href="v2.html?cat=UX 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">UX 용어</a> <a href="v2.html?cat=IT 용어" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">IT 용어</a> <a href="v2.html?cat=종료 및 변경" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">종료 및 변경</a> </div> </div> <a href="notice.html" class="block px-2.5 py-2 rounded-xl font-medium bg-slate-800 text-white whitespace-nowrap">공지</a> <div> <div class="flex items-center rounded-xl hover:bg-slate-100"> <a href="learn.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">학습글</a> <button type="button" id="learnNavToggle" class="learn-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 카테고리 펼치기">▾</button> </div> <div id="learnSubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs"> <a href="learn.html?cat=전체" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">전체</a> <a href="learn.html?cat=티오더AI" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">티오더AI</a> <a href="learn.html?cat=어드민" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">어드민</a> <a href="learn.html?cat=POS연동" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">POS·외부연동</a> </div> </div> <div> <div class="flex items-center rounded-xl hover:bg-slate-100"> <a href="pos.html" class="flex-1 px-2.5 py-2 font-medium text-slate-600 whitespace-nowrap">POS <span id="posNavBadge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] align-middle">NEW</span></a> <button type="button" id="posNavToggle" class="pos-nav-toggle px-2 text-slate-400 hover:text-slate-700 text-xs" aria-label="하위 지역 펼치기">▾</button> </div> <div id="posSubnav" class="glossary-subnav hidden pl-2.5 space-y-0.5 mt-1 text-xs"> <a href="pos.html?region=전체" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">전체</a> <a href="pos.html?region=국내" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">국내</a> <a href="pos.html?region=해외" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">해외</a> <a href="pos.html?mode=compare" class="block px-2.5 py-1.5 rounded-full text-slate-500 hover:bg-slate-100 whitespace-nowrap">비교</a> </div> </div> <a href="guide.html" class="hidden flex items-center justify-between px-2.5 py-2 rounded-xl font-medium text-slate-600 hover:bg-slate-100 whitespace-nowrap">가이드 <span id="guideNavBadge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] align-middle">NEW</span></a> <a href="/admin/dashboard.html" id="adminEntryLink" class="hidden flex items-center gap-1.5 px-2.5 py-2 rounded-xl font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 whitespace-nowrap"> 관리자 콘솔</a> </nav> <div class="p-3 border-t border-slate-100 text-xs text-slate-400 flex items-center justify-between gap-2"> <span id="userEmailLabel" class="truncate"></span> <button onclick="AUTH.signOut()" class="text-slate-400 hover:text-rose-500 shrink-0">로그아웃</button> </div> </aside> <!-- 접혔을 때 다시 펼치는 버튼 --> <button id="sidebarOpenBtn" type="button" class="hidden fixed top-4 left-4 z-20 w-7 h-7 flex items-center justify-center bg-white border border-slate-200 rounded-full shadow-sm text-slate-400 hover:bg-slate-50 text-xs" aria-label="사이드바 펼치기">▶</button> <button id="scrollTopBtn" type="button" class="hidden fixed bottom-6 right-6 z-20 w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-full shadow-md text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition" aria-label="맨 위로">↑</button> <!-- 본문: 사이드바 상태와 무관하게 항상 화면 중앙에 고정 --> <div id="contentWrap" class="min-h-screen"> <!-- 상단: 날짜 검색 --> <header class="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm"> <div class="max-w-4xl mx-auto px-4 py-4"> <div class="flex flex-wrap items-center gap-2"> <input id="dateFrom" type="date" class="px-3 py-2 rounded-full border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 text-sm" /> <span class="text-slate-400 text-sm">~</span> <input id="dateTo" type="date" class="px-3 py-2 rounded-full border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 text-sm" /> <button id="dateFilterReset" type="button" class="px-3 py-2 rounded-full text-sm font-medium border border-slate-300 bg-white text-slate-500 hover:bg-slate-50">전체 기간</button> </div> </div> </header> <!-- 본문: 공지 카드 --> <main id="content" class="max-w-4xl mx-auto px-4 py-6 space-y-4"> <p id="statusMessage" class="text-slate-500 text-center py-10">불러오는 중...</p> </main> <div class="max-w-4xl mx-auto px-4 pb-10 text-right"> <button id="openNoticeForm" class="text-xs text-slate-300 underline hover:text-slate-400">공지 입력</button> </div> </div> <!-- 비밀번호 확인 모달 --> <div id="passwordModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"> <div class="bg-white rounded-2xl p-6 w-full max-w-sm"> <h3 class="font-bold mb-3">비밀번호 확인</h3> <input id="passwordInput" type="password" inputmode="numeric" maxlength="6" placeholder="6자리 숫자" class="w-full px-3 py-2 border border-slate-300 rounded-xl mb-2" /> <p id="passwordError" class="hidden text-xs text-red-500 mb-2">비밀번호가 틀렸습니다.</p> <div class="flex justify-end gap-2"> <button id="cancelPassword" type="button" class="px-3 py-1.5 text-sm text-slate-500">취소</button> <button id="confirmPassword" type="button" class="px-3 py-1.5 text-sm bg-slate-800 text-white rounded-full">확인</button> </div> </div> </div> <!-- 공지 입력 폼 모달 --> <div id="formModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"> <div class="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto"> <h3 id="formModalTitle" class="font-bold mb-4">새 공지 입력</h3> <form id="noticeForm" class="space-y-3"> <div> <label class="text-xs text-slate-500">날짜</label> <input name="date" type="date" required class="w-full px-3 py-2 border border-slate-300 rounded-xl" /> </div> <div> <label class="text-xs text-slate-500">제목</label> <input name="title" type="text" required class="w-full px-3 py-2 border border-slate-300 rounded-xl" /> </div> <div> <label class="text-xs text-slate-500">내용</label> <div class="border border-slate-300 rounded-xl overflow-hidden"> <div class="flex items-center gap-1 px-2 py-1 border-b border-slate-200 bg-slate-50 flex-wrap"> <button type="button" data-cmd="bold" class="toolbar-btn px-2 py-1 rounded hover:bg-slate-200 font-bold text-sm" title="굵게">B</button> <button type="button" data-cmd="italic" class="toolbar-btn px-2 py-1 rounded hover:bg-slate-200 italic text-sm" title="기울임">I</button> <button type="button" data-cmd="underline" class="toolbar-btn px-2 py-1 rounded hover:bg-slate-200 underline text-sm" title="밑줄">U</button> <button type="button" data-cmd="strikeThrough" class="toolbar-btn px-2 py-1 rounded hover:bg-slate-200 line-through text-sm" title="취소선">S</button> <span class="w-px h-4 bg-slate-300 mx-1"></span> <button type="button" data-cmd="createLink" class="toolbar-btn px-2 py-1 rounded hover:bg-slate-200 text-sm" title="링크"></button> <button type="button" data-cmd="insertUnorderedList" class="toolbar-btn px-2 py-1 rounded hover:bg-slate-200 text-sm" title="글머리 기호">• 목록</button> <button type="button" data-cmd="insertOrderedList" class="toolbar-btn px-2 py-1 rounded hover:bg-slate-200 text-sm" title="번호 매기기">1. 목록</button> <span class="w-px h-4 bg-slate-300 mx-1"></span> <button type="button" data-cmd="outdent" class="toolbar-btn px-2 py-1 rounded hover:bg-slate-200 text-sm" title="내어쓰기 (Shift+Tab)">←</button> <button type="button" data-cmd="indent" class="toolbar-btn px-2 py-1 rounded hover:bg-slate-200 text-sm" title="들여쓰기, 하위 계층 (Tab)">→</button> </div> <div id="contentEditor" class="rich-content px-3 py-2 min-h-[120px] text-sm focus:outline-none" contenteditable="true" data-placeholder="공지 내용을 입력하세요"></div> </div> </div> <div> <label class="text-xs text-slate-500">문의 채널 (예: [#comm-ai플랫폼실](슬랙 채널 링크))</label> <input name="inquiryChannel" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-xl" /> </div> <div> <label class="text-xs text-slate-500">담당자 (예: [@브랜든_Product Growth](슬랙 프로필 링크), 여러 명은 이어서 입력)</label> <textarea name="inquiryOwner" rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-xl"></textarea> </div> <div> <label class="text-xs text-slate-500">원본 링크 (선택)</label> <input name="link" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-xl" /> </div> <p id="submitError" class="hidden text-xs text-red-500"></p> <div class="flex justify-end gap-2 pt-2"> <button type="button" id="cancelForm" class="px-3 py-1.5 text-sm text-slate-500">취소</button> <button type="submit" id="submitNotice" class="px-3 py-1.5 text-sm bg-slate-800 text-white rounded-full">등록</button> </div> </form> </div> </div> <!-- 관련어 클릭 시 잠깐 뜨는 정의 팝업 --> <div id="termPopup" class="hidden fixed z-50 max-w-xs bg-slate-900 text-white text-xs rounded-xl p-3 shadow-lg"> <div id="termPopupTitle" class="font-bold mb-1"></div> <div id="termPopupDefinition" class="leading-relaxed"></div> <div id="termPopupNote" class="hidden text-slate-300 mt-1 pt-1 border-t border-white/10"></div> </div> <script> // 사이드바 접기/펼치기 (localStorage로 상태 기억)
+    const MOBILE_BREAKPOINT = 768;
+    (function () {
+      const sidebar = document.getElementById('sidebar');
+      const openBtn = document.getElementById('sidebarOpenBtn');
+      const contentWrap = document.getElementById('contentWrap');
+      // 화면이 좁을 때(모바일, 작은 팝업 창)는 사이드바가 열리면 본문을 오른쪽으로 밀어서 가려지지 않게 합니다.
+      function applyMobileOffset(collapsed) {
+        const isNarrow = window.innerWidth <= MOBILE_BREAKPOINT;
+        contentWrap.style.marginLeft = (isNarrow && !collapsed) ? '176px' : '';
+      }
+      function applyState(collapsed) {
+        sidebar.classList.toggle('collapsed', collapsed);
+        openBtn.classList.toggle('hidden', !collapsed);
+        applyMobileOffset(collapsed);
+      }
+      applyState(localStorage.getItem('sidebarCollapsed') === 'true');
+      document.getElementById('sidebarToggle').addEventListener('click', () => {
+        localStorage.setItem('sidebarCollapsed', 'true');
+        applyState(true);
+      });
+      openBtn.addEventListener('click', () => {
+        localStorage.setItem('sidebarCollapsed', 'false');
+        applyState(false);
+      });
+      window.addEventListener('resize', () => {
+        applyMobileOffset(sidebar.classList.contains('collapsed'));
+      });
+    })();
+
+    // 맨 위로 스크롤 버튼
+    (function () {
+      const btn = document.getElementById('scrollTopBtn');
+      window.addEventListener('scroll', () => {
+        btn.classList.toggle('hidden', window.scrollY < 300);
+      });
+      btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    })();
+
+    function setupNavToggle(toggleId, subnavId) {
+      const subnav = document.getElementById(subnavId);
+      const btn = document.getElementById(toggleId);
+      btn.addEventListener('click', () => {
+        subnav.classList.toggle('hidden');
+        btn.textContent = subnav.classList.contains('hidden') ? '▾' : '▴';
+      });
+    }
+    setupNavToggle('evalNavToggle', 'evalSubnav');
+    setupNavToggle('glossaryNavToggle', 'glossarySubnav');
+    setupNavToggle('posNavToggle', 'posSubnav');
+    setupNavToggle('learnNavToggle', 'learnSubnav');
+
+    // 공지 데이터 소스
+    const NOTICE_SHEET_ID = '1MArCmGbnQTSVt2w8FshkKj0WsUN8pFb7PoITb2jrkdc';
+    const NOTICE_SHEET_NAME = '공지';
+
+    // 관련어 연결을 위한 용어집 데이터 소스 ("종료 및 변경"은 이미 끝난 개념이라 관련어 후보에서 제외)
+    const GLOSSARY_SOURCES = [
+      { sheetId: '1MArCmGbnQTSVt2w8FshkKj0WsUN8pFb7PoITb2jrkdc', categories: ['제품 용어', '추가 기능 용어', 'UX 용어', 'IT 용어'], page: 'v2.html' },
+    ];
+
+    const MAX_RELATED_TERMS = 15;
+
+    // 최근 며칠 이내 등록된 공지를 "새 공지"로 강조할지 (오늘 포함 3일 전까지)
+    const NEW_NOTICE_WINDOW_DAYS = 3;
+
+    // 공지 입력 보호용 비밀번호 (가벼운 저지선 — 강력한 보안은 아닙니다)
+    const NOTICE_PASSWORD = '190103';
+
+    // 구글 시트에 새 공지를 기록할 Apps Script 웹 앱 주소
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzyZwSfE8qKyUpJt_65WlpL-bbKhT7UNTDmZzSZ2PStZy1bV_ZSaPUNQh6DgZtGz7TJNQ/exec';
+
+    function sheetUrl(sheetId, sheetName) {
+      return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+    }
+
+    // RFC4180 형식의 CSV를 파싱 (따옴표, 콤마, 줄바꿈 포함 셀 지원)
+    function parseCSV(text) {
+      const rows = [];
+      let row = [];
+      let field = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const next = text[i + 1];
+
+        if (inQuotes) {
+          if (char === '"' && next === '"') {
+            field += '"';
+            i++;
+          } else if (char === '"') {
+            inQuotes = false;
+          } else {
+            field += char;
+          }
+        } else {
+          if (char === '"') {
+            inQuotes = true;
+          } else if (char === ',') {
+            row.push(field);
+            field = '';
+          } else if (char === '\n' || char === '\r') {
+            if (char === '\r' && next === '\n') i++;
+            row.push(field);
+            rows.push(row);
+            row = [];
+            field = '';
+          } else {
+            field += char;
+          }
+        }
+      }
+      if (field.length > 0 || row.length > 0) {
+        row.push(field);
+        rows.push(row);
+      }
+      return rows.filter(r => r.some(cell => cell.trim() !== ''));
+    }
+
+    async function fetchCSV(sheetId, sheetName) {
+      const res = await fetch(sheetUrl(sheetId, sheetName));
+      if (!res.ok) throw new Error(`"${sheetName}" 시트를 불러오지 못했습니다.`);
+      const text = await res.text();
+      return parseCSV(text);
+    }
+
+    async function loadNotices() {
+      const rows = await fetchCSV(NOTICE_SHEET_ID, NOTICE_SHEET_NAME);
+      const [header, ...body] = rows;
+      return body.map(cols => ({
+        id: (cols[0] || '').trim(),
+        date: (cols[1] || '').trim(),
+        title: (cols[2] || '').trim(),
+        content: (cols[3] || '').trim(),
+        owner: (cols[4] || '').trim(),
+        link: (cols[5] || '').trim(),
+      })).filter(item => item.title)
+        // 날짜가 최신인 공지가 위로 오도록 정렬 (날짜가 같으면 나중에 등록된 것이 위로)
+        .sort((a, b) => {
+          if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+          return Number(b.id) - Number(a.id);
+        });
+    }
+
+    // 용어집 전체를 불러와 "용어 -> 정의/페이지" 매핑을 만듭니다.
+    async function loadTermIndex() {
+      const terms = [];
+      for (const source of GLOSSARY_SOURCES) {
+        for (const category of source.categories) {
+          const rows = await fetchCSV(source.sheetId, category);
+          const [header, ...body] = rows;
+          body.forEach(cols => {
+            const term = (cols[1] || '').trim();
+            const definition = (cols[2] || '').trim();
+            const note = (cols[3] || '').trim();
+            if (term) terms.push({ term, definition, note, page: source.page });
+          });
+        }
+      }
+      // 긴 용어부터 매칭해야 짧은 용어의 부분 문자열 오탐이 줄어듭니다.
+      return terms.sort((a, b) => b.term.length - a.term.length);
+    }
+
+    // HTML 태그를 걷어내고 눈에 보이는 텍스트만 남깁니다 (굵게/목록 태그가 단어를 끊어놓는 것 방지).
+    function stripHtml(html) {
+      const div = document.createElement('div');
+      div.innerHTML = html;
+      return div.textContent || '';
+    }
+
+    // 용어 매칭 시 의미 없는 조사/포괄 단어는 단독으로 매칭되지 않도록 걸러냅니다.
+    const RELATED_TERM_STOPWORDS = new Set([
+      '기능', '방식', '서비스', '화면', '설정', '관리', '시스템', '항목', '정보',
+      '상태', '절차', '방법', '경우', '대상', '확인', '처리', '내용', '기준',
+      '값', '수', '것', '및', '등', '그', '이',
+      // 티오더/포스/오더/매장은 사내 용어 대부분에 공통으로 붙는 접두어라 그 자체로는 변별력이 없습니다.
+      // ("티오더"라는 표기 안에 "오더"가 부분 문자열로 포함되어 있어, "오더"를 막지 않으면
+      //  "티오더"만 언급해도 "오더 ○○" 계열 용어가 전부 관련어로 잘못 잡힙니다.)
+      '티오더', '포스', '버전', '실행', '오더', '매장',
+      // 공지가 항상 같은 형식("안녕하세요. AI플랫폼실입니다", "~사전 안내드립니다",
+      // "배포 및 적용 일시")으로 시작해서, 이 안의 단어들이 매번 반복적으로 오탐을 일으킵니다.
+      '안내', '플랫폼', 'AI', '적용',
+    ]);
+
+    function termTokens(term) {
+      return term
+        .split(/[\s()/·ㆍ,、]+/)
+        .map(t => t.trim())
+        .filter(t => t.length >= 2 && !RELATED_TERM_STOPWORDS.has(t));
+    }
+
+    function findRelatedTerms(text, termIndex) {
+      const haystack = text.toLowerCase();
+      const found = [];
+      const seen = new Set();
+      for (const item of termIndex) {
+        if (seen.has(item.term)) continue;
+        if (item.term.length < 2) continue;
+
+        const termLower = item.term.toLowerCase();
+        let matched = haystack.includes(termLower);
+
+        // 전체 문구가 그대로 없어도, 의미 있는 핵심 단어가 포함되어 있으면 매칭합니다.
+        if (!matched) {
+          const tokens = termTokens(item.term);
+          matched = tokens.some(tok => haystack.includes(tok.toLowerCase()));
+        }
+
+        if (matched) {
+          found.push(item);
+          seen.add(item.term);
+        }
+        if (found.length >= MAX_RELATED_TERMS) break;
+      }
+      return found;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // 리치 텍스트 편집기에서 저장된 실제 HTML인지, 예전 방식의 일반 텍스트인지 구분합니다.
+    function looksLikeHtml(str) {
+      return /<\/?[a-z][\s\S]*>/i.test(str);
+    }
+
+    // 편집기에서 저장된 HTML 중 허용된 태그/속성만 남기고 나머지는 제거합니다.
+    function sanitizeHtml(html) {
+      const allowedTags = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'UL', 'OL', 'LI', 'BR', 'A', 'DIV', 'SPAN', 'P']);
+      const template = document.createElement('template');
+      template.innerHTML = html;
+
+      const clean = (parent) => {
+        [...parent.childNodes].forEach(node => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            if (!allowedTags.has(node.tagName)) {
+              while (node.firstChild) parent.insertBefore(node.firstChild, node);
+              parent.removeChild(node);
+              return;
+            }
+            [...node.attributes].forEach(attr => {
+              if (!(node.tagName === 'A' && attr.name === 'href')) {
+                node.removeAttribute(attr.name);
+              }
+            });
+            if (node.tagName === 'A') {
+              node.setAttribute('target', '_blank');
+              node.setAttribute('rel', 'noopener');
+            }
+            clean(node);
+          } else if (node.nodeType !== Node.TEXT_NODE) {
+            parent.removeChild(node);
+          }
+        });
+      };
+
+      clean(template.content);
+      return template.innerHTML;
+    }
+
+    // *텍스트*를 굵게 표시합니다 (예전 방식의 일반 텍스트 입력과의 호환용)
+    function renderContentText(str) {
+      if (looksLikeHtml(str)) return sanitizeHtml(str);
+      return escapeHtml(str).replace(/\*([^\n*]+)\*/g, '<strong>$1</strong>');
+    }
+
+    // [이름](링크) 형식은 클릭 가능한 뱃지로, [이름]만 있으면 링크 없는 뱃지로 표시합니다.
+    function renderInquiryText(str) {
+      const linkRegex = /\[([^\]]+)\](?:\(([^)]+)\))?/g;
+      const parts = [];
+      let lastIndex = 0;
+      let match;
+      while ((match = linkRegex.exec(str)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push(escapeHtml(str.slice(lastIndex, match.index)));
+        }
+        const label = escapeHtml(match[1]);
+        const url = match[2] ? escapeHtml(match[2]) : '';
+        if (url) {
+          parts.push(`<a href="${url}" target="_blank" rel="noopener" class="inline-block px-2 py-0.5 mx-0.5 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-800 hover:text-white transition">${label}</a>`);
+        } else {
+          parts.push(`<span class="inline-block px-2 py-0.5 mx-0.5 rounded-full bg-slate-100 text-slate-600">${label}</span>`);
+        }
+        lastIndex = linkRegex.lastIndex;
+      }
+      if (lastIndex < str.length) {
+        parts.push(escapeHtml(str.slice(lastIndex)));
+      }
+      return parts.join('').replace(/\n/g, '<br/>');
+    }
+
+    // 오늘 날짜 기준 N일 전 날짜 문자열 (YYYY-MM-DD)
+    function daysAgoStr(n) {
+      const d = new Date();
+      d.setDate(d.getDate() - n);
+      const pad = x => String(x).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+
+    function isNewNotice(dateStr) {
+      return dateStr >= daysAgoStr(NEW_NOTICE_WINDOW_DAYS);
+    }
+
+    let lastNotices = [];
+
+    // 공지 본문 텍스트 안에서 관련어와 일치하는 부분을 찾아 호버 가능한 span으로 감쌉니다.
+    // 관련어 판정(findRelatedTerms)과 같은 방식으로, 전체 문구가 없으면 핵심 단어(토큰) 단위로도 찾습니다.
+    function highlightTermsInElement(container, relatedTerms) {
+      if (!relatedTerms.length) return;
+      const terms = [...relatedTerms].sort((a, b) => b.term.length - a.term.length);
+
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+      const textNodes = [];
+      let node;
+      while ((node = walker.nextNode())) textNodes.push(node);
+
+      textNodes.forEach(textNode => {
+        const text = textNode.nodeValue;
+        const lower = text.toLowerCase();
+        const matches = [];
+
+        terms.forEach(t => {
+          const termLower = t.term.toLowerCase();
+          const addMatch = (needle) => {
+            if (needle.length < 2) return;
+            let idx = 0;
+            while ((idx = lower.indexOf(needle, idx)) !== -1) {
+              const end = idx + needle.length;
+              const overlaps = matches.some(m => idx < m.end && end > m.start);
+              if (!overlaps) matches.push({ start: idx, end, term: t });
+              idx = end;
+            }
+          };
+
+          const before = matches.length;
+          addMatch(termLower);
+          // 전체 문구가 그대로 안 잡혔으면, 관련어 판정 때와 같은 핵심 단어(토큰)로 다시 시도합니다.
+          if (matches.length === before) {
+            termTokens(t.term).forEach(tok => addMatch(tok.toLowerCase()));
+          }
+        });
+
+        if (!matches.length) return;
+        matches.sort((a, b) => a.start - b.start);
+
+        const frag = document.createDocumentFragment();
+        let cursor = 0;
+        matches.forEach(m => {
+          if (m.start > cursor) frag.appendChild(document.createTextNode(text.slice(cursor, m.start)));
+          const span = document.createElement('span');
+          span.className = 'inline-term-highlight';
+          span.dataset.term = m.term.term;
+          span.dataset.definition = m.term.definition;
+          span.dataset.note = m.term.note || '';
+          span.textContent = text.slice(m.start, m.end);
+          frag.appendChild(span);
+          cursor = m.end;
+        });
+        if (cursor < text.length) frag.appendChild(document.createTextNode(text.slice(cursor)));
+        textNode.parentNode.replaceChild(frag, textNode);
+      });
+    }
+
+    function renderNotices(notices, termIndex) {
+      lastNotices = notices;
+      const content = document.getElementById('content');
+
+      const noticeRelated = notices.map(notice => findRelatedTerms(`${notice.title} ${stripHtml(notice.content)}`, termIndex)
+      );
+
+      const cards = notices.map((notice, i) => {
+        const relatedTerms = noticeRelated[i];
+        const isNew = isNewNotice(notice.date);
+        const cardColorClass = isNew ? 'bg-rose-50 border-rose-200' : 'bg-blue-50 border-blue-100';
+
+        const chips = relatedTerms.map(({ term, definition, note }) => `
+          <button type="button" class="term-chip inline-block px-3 py-1 rounded-full text-xs font-medium bg-white border border-slate-300 text-slate-600 hover:bg-slate-800 hover:text-white hover:border-slate-800 transition" data-term="${escapeHtml(term)}" data-definition="${escapeHtml(definition)}" data-note="${escapeHtml(note)}">${escapeHtml(term)}</button> `).join('');
+
+        return `
+          <article class="rounded-2xl border ${cardColorClass} p-5"> <div class="flex items-baseline justify-between gap-4 mb-2"> <h2 class="text-base font-bold text-slate-900 flex items-center gap-2"> ${escapeHtml(notice.title)}
+                ${isNew ? '<span class="px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] align-middle">NEW</span>' : ''}
+              </h2> <span class="text-xs text-slate-400 shrink-0">${escapeHtml(notice.date)}</span> </div> <div class="rich-content text-sm text-slate-700 leading-relaxed whitespace-pre-line" data-notice-index="${i}">${renderContentText(notice.content)}</div> <div class="flex items-start justify-between gap-4 mt-3 text-xs text-slate-400"> <span class="leading-relaxed">${renderInquiryText(notice.owner)}</span> <span class="flex items-center gap-3 shrink-0"> ${notice.link ? `<a href="${escapeHtml(notice.link)}" target="_blank" rel="noopener" class="text-blue-500 hover:underline">원문 보기 ↗</a>` : ''}
+                <button type="button" class="edit-notice-btn text-slate-300 hover:text-blue-500 underline" data-id="${escapeHtml(notice.id)}">수정</button> <button type="button" class="delete-notice-btn text-slate-300 hover:text-red-500 underline" data-id="${escapeHtml(notice.id)}">삭제</button> </span> </div> ${relatedTerms.length ? `
+              <div class="mt-4 pt-3 border-t border-black/5"> <div class="text-xs text-slate-400 mb-2">관련어</div> <div class="flex flex-wrap gap-1.5">${chips}</div> </div> ` : ''}
+          </article> `;
+      });
+
+      content.innerHTML = cards.length
+        ? cards.join('')
+        : `<p class="text-slate-500 text-center py-10">등록된 공지가 없습니다.</p>`;
+
+      content.querySelectorAll('.rich-content[data-notice-index]').forEach(el => {
+        const idx = Number(el.dataset.noticeIndex);
+        highlightTermsInElement(el, noticeRelated[idx]);
+      });
+    }
+
+    let allNotices = [];
+    let lastTermIndex = [];
+
+    // 시작일/종료일 입력값을 기준으로 공지 목록을 좁힙니다 (비어 있으면 해당 방향은 제한 없음).
+    function applyDateFilter(notices) {
+      const from = document.getElementById('dateFrom').value;
+      const to = document.getElementById('dateTo').value;
+      if (!from && !to) return notices;
+      return notices.filter(n => {
+        if (from && n.date < from) return false;
+        if (to && n.date > to) return false;
+        return true;
+      });
+    }
+
+    function renderFiltered() {
+      renderNotices(applyDateFilter(allNotices), lastTermIndex);
+    }
+
+    // 이 페이지가 곧 공지 목록이므로, 방문 시 가장 최신 공지 id를 "확인함"으로 기록합니다
+    // (다른 페이지의 새 공지 배너/뱃지가 여기서 갱신된 값을 기준으로 사라집니다).
+    function markNoticesSeen(notices) {
+      const ids = notices.map(n => Number(n.id)).filter(n => !isNaN(n));
+      if (ids.length) localStorage.setItem('lastSeenNoticeId', String(Math.max(...ids)));
+    }
+
+    // 사이드바의 가이드/POS NEW 표시만 확인합니다 (공지 자체는 이 페이지가 곧 목록이므로 생략).
+    async function checkFreshnessOthers() {
+      try {
+        const rows = await fetchCSV(NOTICE_SHEET_ID, '가이드');
+        const [header, ...body] = rows;
+        const looksLikeGuide = header.some(h => ['상황', '질문'].includes((h || '').trim()));
+        if (looksLikeGuide) {
+          const count = body.filter(r => (r[0] || '').trim()).length;
+          const seenCount = Number(localStorage.getItem('guideRowCount') || '0');
+          if (count > seenCount) document.getElementById('guideNavBadge').classList.remove('hidden');
+        }
+      } catch {}
+
+      try {
+        const rows = await fetchCSV(NOTICE_SHEET_ID, 'POS 연동 현황');
+        const [, ...body] = rows;
+        const count = body.filter(r => (r[2] || '').trim()).length;
+        const seenCount = Number(localStorage.getItem('posRowCount') || '0');
+        if (count > seenCount) document.getElementById('posNavBadge').classList.remove('hidden');
+      } catch {}
+    }
+
+    async function init() {
+      try {
+        const [notices, termIndex] = await Promise.all([loadNotices(), loadTermIndex()]);
+        allNotices = notices;
+        lastTermIndex = termIndex;
+        markNoticesSeen(notices);
+        renderFiltered();
+      } catch (err) {
+        document.getElementById('content').innerHTML = `
+          <p class="text-red-500 text-center py-10"> 공지를 불러오지 못했습니다.<br /> 구글 시트에 "공지" 탭이 있는지, 공유 설정이 "링크가 있는 모든 사용자 - 뷰어"로 되어 있는지 확인해주세요.<br /> <span class="text-xs text-slate-400">${escapeHtml(err.message)}</span> </p>`;
+      }
+    }
+
+    document.getElementById('dateFrom').addEventListener('change', renderFiltered);
+    document.getElementById('dateTo').addEventListener('change', renderFiltered);
+    document.getElementById('dateFilterReset').addEventListener('click', () => {
+      document.getElementById('dateFrom').value = '';
+      document.getElementById('dateTo').value = '';
+      renderFiltered();
+    });
+
+    let pendingAction = null;
+    let editingId = null;
+
+    function setupNoticeForm() {
+      const openBtn = document.getElementById('openNoticeForm');
+      const passwordModal = document.getElementById('passwordModal');
+      const passwordInput = document.getElementById('passwordInput');
+      const passwordError = document.getElementById('passwordError');
+      const formModal = document.getElementById('formModal');
+      const formModalTitle = document.getElementById('formModalTitle');
+      const noticeForm = document.getElementById('noticeForm');
+      const submitError = document.getElementById('submitError');
+      const submitBtn = document.getElementById('submitNotice');
+      const content = document.getElementById('content');
+
+      // 기존 공지의 담당자 텍스트("문의 채널 : ...\n담당자 : ...")를 두 입력창 값으로 되돌립니다.
+      function fillInquiryFields(owner) {
+        const channelMatch = owner.match(/문의\s*채널\s*:\s*(.+)/);
+        const ownerMatch = owner.match(/담당자\s*:\s*(.+)/);
+        noticeForm.inquiryChannel.value = channelMatch ? channelMatch[1].trim() : '';
+        noticeForm.inquiryOwner.value = ownerMatch ? ownerMatch[1].trim() : '';
+      }
+
+      function openEditForm(notice) {
+        editingId = notice.id;
+        formModalTitle.textContent = '공지 수정';
+        submitBtn.textContent = '수정';
+        noticeForm.date.value = notice.date;
+        noticeForm.title.value = notice.title;
+        contentEditor.innerHTML = looksLikeHtml(notice.content)
+          ? sanitizeHtml(notice.content)
+          : escapeHtml(notice.content).replace(/\n/g, '<br>');
+        fillInquiryFields(notice.owner);
+        noticeForm.link.value = notice.link;
+        submitError.classList.add('hidden');
+        formModal.classList.remove('hidden');
+      }
+
+      function openPasswordGate(action) {
+        pendingAction = action;
+        passwordInput.value = '';
+        passwordError.classList.add('hidden');
+        passwordModal.classList.remove('hidden');
+        passwordInput.focus();
+      }
+
+      const contentEditor = document.getElementById('contentEditor');
+
+      document.querySelectorAll('.toolbar-btn').forEach(btn => {
+        // 버튼 클릭 시 편집기의 선택 영역(포커스)이 풀리지 않도록 막습니다.
+        btn.addEventListener('mousedown', (e) => e.preventDefault());
+        btn.addEventListener('click', () => {
+          const cmd = btn.dataset.cmd;
+          if (cmd === 'createLink') {
+            const url = prompt('연결할 링크 주소를 입력하세요:');
+            if (url) document.execCommand('createLink', false, url);
+          } else {
+            document.execCommand(cmd);
+          }
+          contentEditor.focus();
+        });
+      });
+
+      // 목록 안에서 Tab/Shift+Tab으로 하위/상위 계층 이동
+      contentEditor.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          document.execCommand(e.shiftKey ? 'outdent' : 'indent');
+        }
+      });
+
+      openBtn.addEventListener('click', () => {
+        openPasswordGate(() => {
+          editingId = null;
+          formModalTitle.textContent = '새 공지 입력';
+          submitBtn.textContent = '등록';
+          noticeForm.reset();
+          contentEditor.innerHTML = '';
+          submitError.classList.add('hidden');
+          formModal.classList.remove('hidden');
+        });
+      });
+
+      // 카드가 다시 그려질 때마다 버튼도 새로 생기므로, 이벤트 위임으로 처리합니다.
+      content.addEventListener('click', (e) => {
+        const deleteBtn = e.target.closest('.delete-notice-btn');
+        if (deleteBtn) {
+          const id = deleteBtn.dataset.id;
+          openPasswordGate(() => deleteNotice(id));
+          return;
+        }
+
+        const editBtn = e.target.closest('.edit-notice-btn');
+        if (editBtn) {
+          const id = editBtn.dataset.id;
+          const notice = lastNotices.find(n => n.id === id);
+          if (notice) openPasswordGate(() => openEditForm(notice));
+          return;
+        }
+
+        const chip = e.target.closest('.term-chip');
+        if (chip) {
+          e.stopPropagation();
+          toggleTermPopup(chip);
+          return;
+        }
+
+        // 본문 안의 관련어는 터치 기기에서 호버가 없으므로 탭(클릭)으로도 뜨게 합니다.
+        const inlineTerm = e.target.closest('.inline-term-highlight');
+        if (inlineTerm) {
+          e.stopPropagation();
+          toggleTermPopup(inlineTerm);
+        }
+      });
+
+      // 본문 안의 관련어는 마우스를 올리면 바로 뜨고, 벗어나면 바로 닫힙니다.
+      content.addEventListener('mouseover', (e) => {
+        const inlineTerm = e.target.closest('.inline-term-highlight');
+        if (inlineTerm) showTermPopup(inlineTerm, false);
+      });
+      content.addEventListener('mouseout', (e) => {
+        const inlineTerm = e.target.closest('.inline-term-highlight');
+        if (inlineTerm && !inlineTerm.contains(e.relatedTarget)) hideTermPopup();
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('#termPopup') && !e.target.closest('.term-chip') && !e.target.closest('.inline-term-highlight')) {
+          hideTermPopup();
+        }
+      });
+
+      document.getElementById('cancelPassword').addEventListener('click', () => {
+        passwordModal.classList.add('hidden');
+        pendingAction = null;
+      });
+
+      document.getElementById('confirmPassword').addEventListener('click', () => {
+        if (passwordInput.value.trim() === NOTICE_PASSWORD) {
+          passwordModal.classList.add('hidden');
+          const action = pendingAction;
+          pendingAction = null;
+          if (action) action();
+        } else {
+          passwordError.classList.remove('hidden');
+        }
+      });
+
+      passwordInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('confirmPassword').click();
+      });
+
+      document.getElementById('cancelForm').addEventListener('click', () => {
+        formModal.classList.add('hidden');
+        editingId = null;
+      });
+
+      noticeForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        if (!contentEditor.innerText.trim()) {
+          submitError.textContent = '내용을 입력해주세요.';
+          submitError.classList.remove('hidden');
+          return;
+        }
+
+        const formData = new FormData(noticeForm);
+        const inquiryChannel = formData.get('inquiryChannel').trim();
+        const inquiryOwner = formData.get('inquiryOwner').trim();
+        const owner = [
+          inquiryChannel ? `문의 채널 : ${inquiryChannel}` : '',
+          inquiryOwner ? `담당자 : ${inquiryOwner}` : '',
+        ].filter(Boolean).join('\n');
+
+        const payload = editingId ? {
+          action: 'update',
+          id: editingId,
+          date: formData.get('date'),
+          title: formData.get('title'),
+          content: contentEditor.innerHTML,
+          owner,
+          link: formData.get('link'),
+        } : {
+          date: formData.get('date'),
+          title: formData.get('title'),
+          content: contentEditor.innerHTML,
+          owner,
+          link: formData.get('link'),
+        };
+
+        const isEditing = !!editingId;
+        submitError.classList.add('hidden');
+        submitBtn.disabled = true;
+        submitBtn.textContent = isEditing ? '수정 중...' : '등록 중...';
+
+        try {
+          await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload),
+          });
+          formModal.classList.add('hidden');
+          editingId = null;
+          await init();
+        } catch (err) {
+          submitError.textContent = (isEditing ? '수정에 실패했습니다: ' : '등록에 실패했습니다: ') + err.message;
+          submitError.classList.remove('hidden');
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = isEditing ? '수정' : '등록';
+        }
+      });
+    }
+
+    let termPopupTimer = null;
+
+    function hideTermPopup() {
+      document.getElementById('termPopup').classList.add('hidden');
+      document.getElementById('termPopup').dataset.openFor = '';
+      if (termPopupTimer) clearTimeout(termPopupTimer);
+    }
+
+    function showTermPopup(el, autoHide) {
+      const popup = document.getElementById('termPopup');
+      const term = el.dataset.term;
+
+      document.getElementById('termPopupTitle').textContent = term;
+      document.getElementById('termPopupDefinition').textContent = el.dataset.definition;
+      const noteEl = document.getElementById('termPopupNote');
+      if (el.dataset.note) {
+        noteEl.textContent = el.dataset.note;
+        noteEl.classList.remove('hidden');
+      } else {
+        noteEl.classList.add('hidden');
+      }
+
+      // popup은 position: fixed라서 뷰포트 기준 좌표를 그대로 씁니다 (scrollY를 더하면 안 됨).
+      popup.classList.remove('hidden');
+      const rect = el.getBoundingClientRect();
+      const popupHeight = popup.offsetHeight;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const top = spaceBelow >= popupHeight + 12 ? rect.bottom + 6 : rect.top - popupHeight - 6;
+
+      popup.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - popup.offsetWidth - 8)) + 'px';
+      popup.style.top = Math.max(8, top) + 'px';
+      popup.dataset.openFor = term;
+
+      if (termPopupTimer) clearTimeout(termPopupTimer);
+      if (autoHide) termPopupTimer = setTimeout(hideTermPopup, 4000);
+    }
+
+    // 관련어 칩(클릭): 같은 용어를 다시 누르면 닫히고, 4초 후 자동으로 닫힙니다.
+    function toggleTermPopup(chip) {
+      const popup = document.getElementById('termPopup');
+      if (popup.dataset.openFor === chip.dataset.term && !popup.classList.contains('hidden')) {
+        hideTermPopup();
+        return;
+      }
+      showTermPopup(chip, true);
+    }
+
+    async function deleteNotice(id) {
+      try {
+        await fetch(APPS_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'delete', id }),
+        });
+        await init();
+      } catch (err) {
+        alert('삭제에 실패했습니다: ' + err.message);
+      }
+    }
+
+    setupNoticeForm();
+    (async () => {
+      await init();
+      checkFreshnessOthers();
+    })();
+  </script>
+</body>
+</html>

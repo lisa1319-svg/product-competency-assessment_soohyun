@@ -1,0 +1,2065 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>종합 현황 - t'order 역량평가 관리</title>
+  <link rel="stylesheet" href="/shared/admin-design.css">
+  <style>
+    .overview-section {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .mini-bar-item { display: flex; align-items: center; gap: 8px; }
+    .mini-bar-item__label { font-size: var(--fs-sm); font-weight: 600; color: var(--text-secondary); min-width: 100px; }
+    .mini-bar-item__track { flex: 1; height: 12px; background: var(--border-subtle); border-radius: 6px; overflow: hidden; }
+    .mini-bar-item__fill { height: 100%; border-radius: 6px; background: var(--accent); }
+    .mini-bar-item__value { font-size: var(--fs-xs); font-weight: 700; color: var(--text-secondary); min-width: 40px; text-align: right; }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .section-title h2 {
+      font-size: var(--fs-lg);
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .section-title p {
+      font-size: var(--fs-sm);
+      color: var(--text-tertiary);
+    }
+
+    .section-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .kpi-grid-overview {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .metric-grid-results {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 1200px) {
+      .kpi-grid-overview {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .metric-grid-results {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .kpi-grid-overview {
+        grid-template-columns: 1fr;
+      }
+      .metric-grid-results {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      box-shadow: var(--shadow-panel);
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .metric-card.clickable {
+      cursor: pointer;
+    }
+
+    .metric-card.clickable:hover {
+      border-color: var(--accent);
+      background: var(--accent-subtle);
+    }
+
+    .metric-label {
+      font-size: var(--fs-sm);
+      color: var(--text-muted);
+      font-weight: 700;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .metric-value {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text-primary);
+      line-height: 1.1;
+    }
+
+    .metric-note {
+      font-size: var(--fs-xs);
+      color: var(--text-tertiary);
+      margin-top: 8px;
+    }
+
+    .chart-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 1000px) {
+      .chart-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      box-shadow: var(--shadow-panel);
+    }
+
+    .chart-card__title {
+      font-size: var(--fs-md);
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .chart-card__canvas-wrap {
+      position: relative;
+      height: 300px;
+    }
+
+    .benchmark-note {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      color: var(--text-muted);
+      font-size: var(--fs-xs);
+      font-weight: 600;
+    }
+
+    .benchmark-note::before {
+      content: "";
+      width: 30px;
+      border-top: 2px dashed var(--danger);
+      flex-shrink: 0;
+    }
+
+    .insight-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .insight-card {
+      background: var(--surface-sunken);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+    }
+
+    .insight-card__label {
+      font-size: var(--fs-sm);
+      color: var(--text-tertiary);
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    .insight-card__value {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+
+    .insight-card__note {
+      font-size: var(--fs-xs);
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .score-lane {
+      display: grid;
+      grid-template-columns: 120px 1fr 50px;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .score-lane:last-child {
+      border-bottom: none;
+    }
+
+    .score-lane__label {
+      font-size: var(--fs-sm);
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .score-track {
+      position: relative;
+      height: 12px;
+      border-radius: 999px;
+      background: var(--border-subtle);
+      overflow: hidden;
+    }
+
+    .score-track::after {
+      content: "";
+      position: absolute;
+      left: 75%;
+      top: -4px;
+      width: 1px;
+      height: 20px;
+      border-left: 2px dashed var(--danger);
+    }
+
+    .score-fill {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+      width: 0;
+      transition: width 0.3s ease;
+    }
+
+    .score-fill.fail {
+      background: var(--danger);
+    }
+
+    .score-lane__value {
+      font-size: var(--fs-sm);
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .team-summary-table {
+      width: 100%;
+      font-size: var(--fs-sm);
+      border-collapse: collapse;
+    }
+
+    .team-summary-table thead th {
+      position: sticky;
+      top: 0;
+      background: var(--surface-sunken);
+      color: var(--text-tertiary);
+      font-weight: 700;
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      white-space: nowrap;
+    }
+
+    .team-summary-table tbody td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+    }
+
+    .team-summary-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .team-summary-table tbody tr:hover {
+      background: var(--surface-sunken);
+    }
+
+    .team-detail-accordion {
+      background: var(--surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      margin-top: 20px;
+      box-shadow: var(--shadow-panel);
+      overflow: hidden;
+    }
+
+    .accordion-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: var(--surface-sunken);
+      border-bottom: 1px solid var(--border-subtle);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .accordion-header:hover {
+      background: var(--border-subtle);
+    }
+
+    .accordion-header__title {
+      font-size: var(--fs-md);
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0;
+    }
+
+    .accordion-header__badges {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .accordion-toggle {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s ease;
+    }
+
+    .accordion-toggle.collapsed {
+      transform: rotate(-90deg);
+    }
+
+    .accordion-body {
+      padding: 20px;
+      display: none;
+    }
+
+    .accordion-body.open {
+      display: block;
+    }
+
+    .team-detail-summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .team-detail-summary {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .summary-item {
+      background: var(--surface-sunken);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      text-align: center;
+    }
+
+    .summary-item__label {
+      font-size: var(--fs-xs);
+      color: var(--text-tertiary);
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    .summary-item__value {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+
+    .weak-items-table {
+      width: 100%;
+      font-size: var(--fs-sm);
+      margin-top: 12px;
+    }
+
+    .weak-items-table thead th {
+      background: var(--surface-sunken);
+      color: var(--text-tertiary);
+      font-weight: 700;
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .weak-items-table tbody td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .weak-items-table tbody tr:hover {
+      background: var(--surface-sunken);
+    }
+
+    .detail-button {
+      padding: 4px 8px;
+      font-size: var(--fs-xs);
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+
+    .detail-button:hover {
+      background: var(--accent-hover);
+    }
+
+    .retake-list {
+      width: 100%;
+      font-size: var(--fs-sm);
+      margin-top: 12px;
+    }
+
+    .retake-list thead th {
+      background: var(--surface-sunken);
+      color: var(--text-tertiary);
+      font-weight: 700;
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .retake-list tbody td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .team-detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin: 20px 0;
+    }
+
+    @media (max-width: 1000px) {
+      .team-detail-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .team-detail-chart {
+      background: var(--surface-sunken);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 12px;
+    }
+
+    .team-detail-chart h4 {
+      font-size: var(--fs-sm);
+      font-weight: 700;
+      margin: 0 0 12px 0;
+      color: var(--text-primary);
+    }
+
+    .team-detail-chart canvas {
+      max-height: 250px;
+    }
+
+    .modal-list-table {
+      width: 100%;
+      font-size: var(--fs-sm);
+    }
+
+    .modal-list-table thead th {
+      background: var(--surface-sunken);
+      color: var(--text-tertiary);
+      font-weight: 700;
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .modal-list-table tbody td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .modal-list-table tbody tr:hover {
+      background: var(--surface-sunken);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav class="sidebar" id="sidebar"></nav>
+    <header class="topbar" id="topbar"></header>
+    <main class="main">
+      <div class="content">
+        <div class="page-head">
+          <div>
+            <h1 class="page-title">종합 현황</h1>
+            <p class="page-desc">평가 응시 현황과 팀별 성과를 한눈에 확인합니다.</p>
+          </div>
+        </div>
+
+        <div class="overview-section">
+          <!-- 섹션 1: 운영 현황 -->
+          <div>
+            <div class="section-header">
+              <div class="section-title">
+                <h2 id="section1-title">운영 현황</h2>
+                <p id="section1-desc">응시 진행률과 미응시자 후속 조치 상태를 확인합니다.</p>
+              </div>
+              <div class="section-actions">
+                <button class="btn btn-outline" id="btn-view-pending">미응시자 목록 보기</button>
+                <button class="btn btn-primary" id="btn-send-pending">미응시자 독려 알림 발송</button>
+              </div>
+            </div>
+            <div class="kpi-grid-overview" id="section1-kpis">
+              <!-- KPI 카드 자동 생성 -->
+            </div>
+          </div>
+
+          <!-- 섹션 2: 평가 결과 -->
+          <div>
+            <div class="section-header">
+              <div class="section-title">
+                <h2>평가 결과</h2>
+                <p>전체 성과와 후속 관리 대상자를 요약합니다. 수치를 선택하면 명단을 확인할 수 있습니다.</p>
+              </div>
+            </div>
+            <div class="metric-grid-results" id="section2-metrics">
+              <!-- 평가 결과 카드 자동 생성 -->
+            </div>
+          </div>
+
+          <!-- 섹션 2.5: 재시험 싱크 개선 결과 (재시험 모드 전용) -->
+          <div id="sectionSyncWrap" style="display:none;">
+            <div class="section-header">
+              <div class="section-title">
+                <h2>재시험 싱크 개선 결과</h2>
+                <p>점수보다 공식 기준·용어·고객 안내 기준의 개선 여부를 우선 확인합니다.</p>
+              </div>
+            </div>
+            <div class="metric-grid-results" id="section-sync-metrics"></div>
+          </div>
+
+          <!-- 섹션 3: 팀별 평균 점수 (본시험 모드) -->
+          <div id="sectionTeamScoreWrap">
+            <div class="section-header">
+              <div class="section-title">
+                <h2>팀별 평균 점수</h2>
+                <p>합격 기준선 75점과 비교합니다.</p>
+              </div>
+            </div>
+            <div class="chart-row">
+              <div class="chart-card">
+                <div class="chart-card__title">팀별 평균 점수</div>
+                <div class="chart-card__canvas-wrap">
+                  <canvas id="chartTeamScore" aria-label="팀별 평균 점수와 기준선"></canvas>
+                </div>
+                <div class="benchmark-note">붉은 점선은 기준선 75점입니다.</div>
+              </div>
+              <div class="panel">
+                <div class="panel-body">
+                  <div class="insight-grid">
+                    <div class="insight-card">
+                      <div class="insight-card__label">기준선 이상 팀</div>
+                      <div class="insight-card__value" id="count-above">0</div>
+                      <div class="insight-card__note">평균 75점 이상</div>
+                    </div>
+                    <div class="insight-card">
+                      <div class="insight-card__label">기준선 미달 팀</div>
+                      <div class="insight-card__value" id="count-below">0</div>
+                      <div class="insight-card__note">즉시 보강 필요</div>
+                    </div>
+                  </div>
+                  <h3 style="margin: 0 0 14px; font-size: var(--fs-md); font-weight: 700; color: var(--text-primary);">팀별 기준선 거리</h3>
+                  <div id="scoreLaneList" style="display: flex; flex-direction: column; gap: 0;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 섹션 4: 팀별 요약 대시보드 (본시험 모드) -->
+          <div id="sectionTeamSummaryWrap">
+            <div class="section-header">
+              <div class="section-title">
+                <h2>팀별 요약 대시보드</h2>
+                <p>팀별 응시율, 재시험 대상, 평균 점수와 합격률을 비교합니다.</p>
+              </div>
+            </div>
+            <div class="chart-row">
+              <div class="chart-card">
+                <div class="chart-card__title">팀별 응시율</div>
+                <div class="chart-card__canvas-wrap">
+                  <canvas id="chartTeamRate" aria-label="팀별 응시율"></canvas>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-body">
+                  <h3 style="margin: 0 0 12px; font-size: var(--fs-md); font-weight: 700; color: var(--text-primary);">팀별 재시험 대상</h3>
+                  <div id="retakeBarList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                </div>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="team-summary-table" id="teamSummaryTable">
+                <thead>
+                  <tr>
+                    <th>팀명</th>
+                    <th>평균 점수</th>
+                    <th>합격률</th>
+                    <th>응시율</th>
+                    <th>취약 영역</th>
+                    <th>재시험 대상자</th>
+                    <th>위험군 대상자</th>
+                    <th>이전 회차 대비</th>
+                    <th>상세보기</th>
+                  </tr>
+                </thead>
+                <tbody id="teamSummaryBody">
+                  <!-- 팀별 행 자동 생성 -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 섹션 4: 팀별 개선 대시보드 (재시험 모드 전용) -->
+          <div id="sectionTeamRetakeWrap" style="display:none;">
+            <div class="section-header">
+              <div class="section-title">
+                <h2>팀별 개선 대시보드</h2>
+                <p>팀별 재시험 대상 규모와 평균 개선폭을 비교합니다. 팀명을 누르면 상세를 확인할 수 있습니다.</p>
+              </div>
+            </div>
+            <div class="chart-row">
+              <div class="chart-card">
+                <div class="chart-card__title">팀별 평균 개선폭</div>
+                <div class="chart-card__canvas-wrap">
+                  <canvas id="chartTeamImprove" aria-label="팀별 재시험 평균 개선폭"></canvas>
+                </div>
+                <div class="benchmark-note">재시험을 완료한 대상자의 본시험 대비 점수 상승폭입니다.</div>
+              </div>
+              <div class="panel">
+                <div class="panel-body">
+                  <h3 style="margin: 0 0 12px; font-size: var(--fs-md); font-weight: 700; color: var(--text-primary);">잔여 리스크 메모</h3>
+                  <div id="retakeRiskBarList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                  <p class="benchmark-note" style="margin-top:14px;">재시험에서는 응시율보다 본시험 대비 개선폭과 잔여 원인 축을 우선 확인하는 구성이 더 적합합니다.</p>
+                </div>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="team-summary-table" id="teamRetakeSummaryTable">
+                <thead>
+                  <tr>
+                    <th>팀</th>
+                    <th>재시험 대상</th>
+                    <th>응시 완료</th>
+                    <th>본시험 평균</th>
+                    <th>재시험 평균</th>
+                    <th>평균 개선폭</th>
+                    <th>최종 합격 전환</th>
+                    <th>잔여 원인</th>
+                    <th>상세보기</th>
+                  </tr>
+                </thead>
+                <tbody id="teamRetakeSummaryBody">
+                  <!-- 팀별 행 자동 생성 -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 팀별 상세 아코디언 (페이지 하단에 동적으로 추가됨) -->
+          <div id="teamDetailAccordionContainer"></div>
+        </div>
+
+        <!-- 대상자 미배정 상태 -->
+        <div id="noTargetsState" class="empty-state" style="display: none; margin: 40px 0;">
+          <div class="empty-state__icon"></div>
+          <div id="noTargetsMessage">아직 대상자가 배정되지 않았습니다.</div>
+          <a href="/admin/round-create.html" class="btn btn-primary" style="margin-top: 12px;" id="noTargetsAction">평가 만들기</a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 미응시자 목록 모달 -->
+  <dialog class="modal" id="modalPendingList">
+    <div class="modal-head">
+      <h3>미응시자 목록</h3>
+      <button class="modal-close" onclick="document.getElementById('modalPendingList').close()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="table-wrap">
+        <table class="modal-list-table" id="pendingListTable">
+          <thead>
+            <tr>
+              <th>이름</th>
+              <th>팀</th>
+              <th>발송 상태</th>
+            </tr>
+          </thead>
+          <tbody id="pendingListBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- 명단 모달 (합격자, 재시험 대상, Tier0, 위험군) -->
+  <dialog class="modal modal--lg" id="modalListDetail">
+    <div class="modal-head">
+      <h3 id="modalListTitle">명단</h3>
+      <button class="modal-close" onclick="document.getElementById('modalListDetail').close()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="table-wrap">
+        <table class="modal-list-table" id="detailListTable">
+          <thead id="detailListHead"></thead>
+          <tbody id="detailListBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- 문항 상세 모달 -->
+  <dialog class="modal modal--lg" id="modalQuestionDetail">
+    <div class="modal-head">
+      <h3 id="questionDetailTitle">문항 상세</h3>
+      <button class="modal-close" onclick="document.getElementById('modalQuestionDetail').close()">×</button>
+    </div>
+    <div class="modal-body" id="questionDetailBody">
+      <!-- 문항 상세 내용 -->
+    </div>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="/shared/config.js"></script>
+  <script src="/shared/auth.js"></script>
+  <script src="/shared/nav.js"></script>
+  <script>
+    let chartTeamScore = null;
+    let chartTeamRate = null;
+    let activeAccordionTeam = null;
+    let allCharts = {};
+    const AXIS_LABELS = ['제품·기능 이해', '기준·용어 싱크', '업데이트 숙지', '누락 방지', '전달 가능성'];
+
+    const state = {
+      activeRoundId: null,
+      activeExamType: '본시험',
+      data: {
+        rounds: [],
+        targets: [],
+        attempts: [],
+        questions: [],
+        employees: [],
+        settings: {}
+      }
+    };
+
+    (async () => {
+      const auth = await AUTH.requirePage({ admin: true });
+      if (!auth) return;
+
+      const { data: roundsData } = await AUTH.sb
+        .from('exam_rounds')
+        .select('id,label,active')
+        .order('created_at', { ascending: false });
+
+      state.data.rounds = roundsData || [];
+      const params = new URLSearchParams(location.search);
+      state.activeRoundId = params.get('round');
+      if (!state.activeRoundId) {
+        const active = state.data.rounds.find(r => r.active);
+        state.activeRoundId = active ? active.id : (state.data.rounds[0] && state.data.rounds[0].id);
+      }
+      state.activeExamType = params.get('examType') === '재시험' ? '재시험' : '본시험';
+
+      renderAdminShell({
+        role: auth.role,
+        current: '/admin/dashboard.html',
+        email: auth.email,
+        rounds: state.data.rounds,
+        activeRoundId: state.activeRoundId,
+        examType: state.activeExamType,
+        showExamTypeToggle: true,
+        onRoundChange: (id) => {
+          location.href = location.pathname + '?round=' + id + '&examType=' + encodeURIComponent(state.activeExamType);
+        },
+        onExamTypeChange: (type) => {
+          location.href = location.pathname + '?round=' + state.activeRoundId + '&examType=' + encodeURIComponent(type);
+        }
+      });
+
+      if (!state.activeRoundId) {
+        document.getElementById('noTargetsState').style.display = 'flex';
+        return;
+      }
+
+      // Fetch all required data
+      await Promise.all([
+        (async () => {
+          const { data } = await AUTH.sb
+            .from('exam_round_targets')
+            .select('email')
+            .eq('round_id', state.activeRoundId);
+          state.data.targets = (data || []).map(t => t.email);
+        })(),
+        (async () => {
+          const { data } = await AUTH.sb
+            .from('exam_attempts')
+            .select('*')
+            .eq('round_id', state.activeRoundId)
+            .eq('is_retake', state.activeExamType === '재시험');
+          state.data.attempts = data || [];
+        })(),
+        (async () => {
+          const { data } = await AUTH.sb
+            .from('questions')
+            .select('*');
+          state.data.questions = data || [];
+        })(),
+        (async () => {
+          const { data } = await AUTH.sb
+            .from('employees')
+            .select('email,team,name');
+          state.data.employees = data || [];
+        })(),
+        (async () => {
+          const { data } = await AUTH.sb
+            .from('app_settings')
+            .select('key,value');
+          for (const item of data || []) {
+            state.data.settings[item.key] = item.value;
+          }
+        })()
+      ]);
+
+      // 재시험 모드일 때 같은 회차의 본시험(원본) 응시 데이터도 조회 — 개선폭/합격전환/위험군해제 비교용
+      state.data.originalAttempts = [];
+      if (state.activeExamType === '재시험') {
+        const { data } = await AUTH.sb
+          .from('exam_attempts')
+          .select('*')
+          .eq('round_id', state.activeRoundId)
+          .eq('is_retake', false);
+        state.data.originalAttempts = data || [];
+      }
+
+      if (state.data.targets.length === 0) {
+        document.getElementById('noTargetsMessage').textContent =
+          state.activeExamType === '재시험' ? '재시험 대상자가 없습니다.' : '아직 대상자가 배정되지 않았습니다.';
+        document.getElementById('noTargetsAction').style.display =
+          state.activeExamType === '재시험' ? 'none' : 'inline-flex';
+        document.getElementById('noTargetsState').style.display = 'flex';
+        return;
+      }
+
+      document.getElementById('noTargetsState').style.display = 'none';
+
+      // 이전 회차 대비 비교 데이터 (2회차 이상 있을 때만 계산, 없으면 '—' 표시)
+      state.data.prevRoundTeamAvg = null;
+      const activeIdx = state.data.rounds.findIndex(r => r.id === state.activeRoundId);
+      const prevRound = activeIdx >= 0 ? state.data.rounds[activeIdx + 1] : null;
+      if (prevRound) {
+        const { data: prevAttempts } = await AUTH.sb
+          .from('exam_attempts')
+          .select('user_email,score,submitted_at,created_at')
+          .eq('round_id', prevRound.id)
+          .eq('is_retake', state.activeExamType === '재시험')
+          .not('submitted_at', 'is', null);
+        const latestPrev = {};
+        for (const a of prevAttempts || []) {
+          if (!latestPrev[a.user_email] || new Date(a.created_at) > new Date(latestPrev[a.user_email].created_at)) {
+            latestPrev[a.user_email] = a;
+          }
+        }
+        const emailToTeamForPrev = {};
+        for (const emp of state.data.employees) emailToTeamForPrev[emp.email] = emp.team;
+        const byTeamScores = {};
+        for (const email in latestPrev) {
+          const team = emailToTeamForPrev[email];
+          if (!team) continue;
+          if (!byTeamScores[team]) byTeamScores[team] = [];
+          byTeamScores[team].push(latestPrev[email].score || 0);
+        }
+        state.data.prevRoundTeamAvg = {};
+        for (const team in byTeamScores) {
+          const arr = byTeamScores[team];
+          state.data.prevRoundTeamAvg[team] = arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+        }
+      }
+
+      // Render page
+      await renderPage();
+    })();
+
+    async function renderPage() {
+      updateLabels();
+      const metrics = calculateMetrics();
+      renderSection1(metrics);
+      renderSection2(metrics);
+      renderSection3(metrics);
+      renderSection4(metrics);
+      if (state.activeExamType === '재시험') {
+        renderSyncImprovement();
+        renderTeamRetake(metrics);
+      }
+      attachEventListeners();
+    }
+
+    function updateLabels() {
+      const isRetake = state.activeExamType === '재시험';
+      if (isRetake) {
+        document.getElementById('section1-title').textContent = '재시험 운영 현황';
+        document.getElementById('section1-desc').textContent = '재시험 진행률과 미응시자 후속 조치 상태를 확인합니다.';
+        document.getElementById('btn-view-pending').textContent = '재시험 미응시자 보기';
+        document.getElementById('btn-send-pending').textContent = '재시험 독려 알림 발송';
+      } else {
+        document.getElementById('btn-view-pending').textContent = '미응시자 목록 보기';
+        document.getElementById('btn-send-pending').textContent = '미응시자 독려 알림 발송';
+      }
+      document.getElementById('sectionSyncWrap').style.display = isRetake ? 'block' : 'none';
+      document.getElementById('sectionTeamScoreWrap').style.display = isRetake ? 'none' : 'block';
+      document.getElementById('sectionTeamSummaryWrap').style.display = isRetake ? 'none' : 'block';
+      document.getElementById('sectionTeamRetakeWrap').style.display = isRetake ? 'block' : 'none';
+    }
+
+    function calculateMetrics() {
+      const emailToTeam = {};
+      for (const emp of state.data.employees) {
+        emailToTeam[emp.email] = emp.team;
+      }
+      const emailToName = {};
+      for (const emp of state.data.employees) {
+        emailToName[emp.email] = emp.name;
+      }
+
+      let latestAttempts = {};
+      for (const att of state.data.attempts) {
+        const key = att.user_email;
+        if (!latestAttempts[key] || new Date(att.created_at) > new Date(latestAttempts[key].created_at)) {
+          latestAttempts[key] = att;
+        }
+      }
+      latestAttempts = Object.values(latestAttempts);
+
+      // 재시험 모드: 분모(대상자 수)는 "본시험 불합격자"여야 함(전체 회차 대상자 아님) — originalLatest는 아래 비교 지표 계산에서도 재사용
+      const originalLatest = {};
+      for (const att of state.data.originalAttempts) {
+        if (!att.submitted_at) continue;
+        const key = att.user_email;
+        if (!originalLatest[key] || new Date(att.created_at) > new Date(originalLatest[key].created_at)) {
+          originalLatest[key] = att;
+        }
+      }
+      const retakeTargetEmails = state.activeExamType === '재시험'
+        ? Object.values(originalLatest).filter(o => !o.passed).map(o => o.user_email)
+        : null;
+
+      const totalBase = retakeTargetEmails ? retakeTargetEmails.length : state.data.targets.length;
+      const completed = retakeTargetEmails
+        ? latestAttempts.filter(a => a.submitted_at && retakeTargetEmails.includes(a.user_email)).length
+        : latestAttempts.filter(a => a.submitted_at).length;
+      const pending = totalBase - completed;
+      const completionRate = totalBase > 0 ? Math.round(completed / totalBase * 100) : 0;
+
+      const completedAttempts = latestAttempts.filter(a => a.submitted_at);
+      const avgScore = completedAttempts.length > 0
+        ? Math.round(completedAttempts.reduce((sum, a) => sum + (a.score || 0), 0) / completedAttempts.length)
+        : 0;
+
+      const passCount = completedAttempts.filter(a => a.passed).length;
+      const passRate = completedAttempts.length > 0 ? Math.round(passCount / completedAttempts.length * 100) : 0;
+
+      const retakeCount = completedAttempts.filter(a => !a.passed).length;
+
+      // Tier 0 fail
+      const tier0Questions = state.data.questions.filter(q => q.tier === 0);
+      let tier0FailCount = 0;
+      for (const att of completedAttempts) {
+        if (!att.answers) continue;
+        const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+        const tier0Answers = tier0Questions.map(q => answers[q.id]).filter(Boolean);
+        if (tier0Answers.length > 0) {
+          const tier0Correct = tier0Answers.filter(a => a.correct).length;
+          if (tier0Correct / tier0Answers.length < 0.9) tier0FailCount++;
+        }
+      }
+
+      // Risk count
+      const riskThreshold = state.data.settings.policy_risk_wrong_rate?.value || 40;
+      let riskCount = 0;
+      for (const att of completedAttempts) {
+        if (!att.answers) continue;
+        const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+        let wrongCount = 0, totalCount = 0;
+        for (const qid in answers) {
+          const ans = answers[qid];
+          if (ans && ans.correct !== undefined) {
+            totalCount++;
+            if (!ans.correct) wrongCount++;
+          }
+        }
+        if (totalCount > 0 && (wrongCount / totalCount * 100) >= riskThreshold) {
+          riskCount++;
+        }
+      }
+
+      // qid -> question 매핑 (도메인/역량축 조회용)
+      const qMap = {};
+      for (const q of state.data.questions) qMap[q.id] = q;
+
+      // Team data
+      const teams = [...new Set(Object.values(emailToTeam).filter(Boolean))].sort();
+      const teamData = {};
+      for (const team of teams) {
+        const teamEmails = state.data.targets.filter(e => emailToTeam[e] === team);
+        const teamAttempts = completedAttempts.filter(a => emailToTeam[a.user_email] === team);
+        const teamScores = teamAttempts.map(a => a.score || 0);
+
+        // 팀별 카테고리(domain)/역량축(axis) 정답률 집계 — 실데이터 기반
+        const domainStats = {};
+        const axisStats = {};
+        for (const att of teamAttempts) {
+          if (!att.answers) continue;
+          const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+          for (const qid in answers) {
+            const q = qMap[qid];
+            const ans = answers[qid];
+            if (!q || ans.correct === undefined) continue;
+            if (q.domain) {
+              if (!domainStats[q.domain]) domainStats[q.domain] = { correct: 0, total: 0 };
+              domainStats[q.domain].total++;
+              if (ans.correct) domainStats[q.domain].correct++;
+            }
+            if (q.axis) {
+              if (!axisStats[q.axis]) axisStats[q.axis] = { correct: 0, total: 0 };
+              axisStats[q.axis].total++;
+              if (ans.correct) axisStats[q.axis].correct++;
+            }
+          }
+        }
+        let weakDomain = null, weakRate = 101;
+        for (const d in domainStats) {
+          const rate = domainStats[d].total > 0 ? (domainStats[d].correct / domainStats[d].total * 100) : 0;
+          if (rate < weakRate) { weakRate = rate; weakDomain = d; }
+        }
+
+        teamData[team] = {
+          targets: teamEmails.length,
+          completed: teamAttempts.length,
+          scores: teamScores,
+          avg: teamScores.length > 0 ? Math.round(teamScores.reduce((a, b) => a + b) / teamScores.length) : 0,
+          rate: teamEmails.length > 0 ? Math.round(teamAttempts.length / teamEmails.length * 100) : 0,
+          attempts: teamAttempts,
+          members: teamEmails,
+          pass: teamAttempts.filter(a => a.passed).length,
+          retake: teamAttempts.filter(a => !a.passed).length,
+          domainStats,
+          axisStats,
+          weakDomain
+        };
+      }
+
+      // 재시험 모드 전용 비교 지표 (본시험 대비 개선폭/합격전환/위험군해제) — 실데이터 기반
+      let retakeComparison = null;
+      let teamRetakeData = null;
+      if (state.activeExamType === '재시험') {
+        const wrongRateOf = (att) => {
+          if (!att.answers) return 0;
+          const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+          let wrong = 0, total = 0;
+          for (const qid in answers) {
+            const ans = answers[qid];
+            if (ans && ans.correct !== undefined) { total++; if (!ans.correct) wrong++; }
+          }
+          return total > 0 ? (wrong / total * 100) : 0;
+        };
+
+        let improvementSum = 0, improvementCount = 0, convertedPassCount = 0, riskReleasedCount = 0, matchedOriginalScoreSum = 0;
+        for (const att of completedAttempts) {
+          const orig = originalLatest[att.user_email];
+          if (!orig) continue;
+          improvementSum += (att.score || 0) - (orig.score || 0);
+          matchedOriginalScoreSum += (orig.score || 0);
+          improvementCount++;
+          if (!orig.passed && att.passed) convertedPassCount++;
+          const wasRisk = wrongRateOf(orig) >= riskThreshold;
+          const stillRisk = wrongRateOf(att) >= riskThreshold;
+          if (wasRisk && !stillRisk) riskReleasedCount++;
+        }
+
+        retakeComparison = {
+          beforeAverage: improvementCount > 0 ? Math.round(matchedOriginalScoreSum / improvementCount) : 0,
+          averageImprovement: improvementCount > 0 ? Math.round((improvementSum / improvementCount) * 10) / 10 : 0,
+          convertedPassCount,
+          riskReleasedCount
+        };
+
+        // 팀별 본시험 대비 개선 지표 (팀별 개선 대시보드용) — 실제 매칭 페어 기반
+        teamRetakeData = {};
+        for (const team of teams) {
+          const info = teamData[team];
+          if (!info) continue;
+          let beforeSum = 0, afterSum = 0, matchCount = 0, convertedPass = 0, riskRemain = 0;
+          for (const att of info.attempts) {
+            const orig = originalLatest[att.user_email];
+            if (!orig) continue;
+            beforeSum += orig.score || 0;
+            afterSum += att.score || 0;
+            matchCount++;
+            if (!orig.passed && att.passed) convertedPass++;
+            if (wrongRateOf(att) >= riskThreshold) riskRemain++;
+          }
+          const teamOriginalFails = Object.values(originalLatest).filter(o => emailToTeam[o.user_email] === team && !o.passed).length;
+          teamRetakeData[team] = {
+            target: teamOriginalFails,
+            completed: info.completed,
+            beforeAverage: matchCount > 0 ? Math.round(beforeSum / matchCount) : null,
+            afterAverage: matchCount > 0 ? Math.round(afterSum / matchCount) : null,
+            improvement: matchCount > 0 ? Math.round(((afterSum - beforeSum) / matchCount) * 10) / 10 : null,
+            convertedPass,
+            riskRemain,
+            weakDomain: info.weakDomain
+          };
+        }
+      }
+
+      return {
+        total: totalBase,
+        completed,
+        pending,
+        completionRate,
+        averageScore: avgScore,
+        passRate,
+        passCount,
+        retakeCount,
+        tier0FailCount,
+        riskCount,
+        retakeComparison,
+        teamRetakeData,
+        teamData,
+        teams: teams.filter(t => teamData[t].targets > 0),
+        emailToTeam,
+        emailToName,
+        latestAttempts,
+        completedAttempts,
+        qMap
+      };
+    }
+
+    // 실 데이터 기반 싱크 지표 계산(sync.html과 동일한 option_tags 분류 로직) — 재시험 종합현황 비교 카드용
+    function computeSyncMetrics(attemptsList) {
+      const emailToTeamLocal = {};
+      for (const emp of state.data.employees) emailToTeamLocal[emp.email] = emp.team;
+      const qMapLocal = {};
+      for (const q of state.data.questions) qMapLocal[q.id] = q;
+
+      const classify = (ans, question) => {
+        if (ans.selected === null || ans.selected === undefined) return 'unrelated';
+        const tags = question.option_tags || [];
+        const tag = tags[ans.selected] || '';
+        if (tag === '구버전 정책') return 'old';
+        if (tag === '타 팀 용어') return 'misuse';
+        if (tag === '유사 기능 혼동') return 'confusion';
+        return 'unrelated';
+      };
+
+      const teamStats = {};
+      let totalCorrect = 0, totalQuestions = 0, totalOld = 0, totalMisuse = 0, totalConfusion = 0;
+
+      for (const att of attemptsList) {
+        if (!att.answers || !att.submitted_at) continue;
+        const team = emailToTeamLocal[att.user_email] || 'Unknown';
+        if (!teamStats[team]) teamStats[team] = { correct: 0, total: 0, old: 0, misuse: 0, confusion: 0 };
+        const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+        for (const qid in answers) {
+          const q = qMapLocal[qid];
+          if (!q) continue;
+          const ans = answers[qid];
+          teamStats[team].total++;
+          totalQuestions++;
+          if (ans.correct) {
+            teamStats[team].correct++;
+            totalCorrect++;
+          } else {
+            const layer = classify(ans, q);
+            if (layer === 'old') { teamStats[team].old++; totalOld++; }
+            else if (layer === 'misuse') { teamStats[team].misuse++; totalMisuse++; }
+            else if (layer === 'confusion') { teamStats[team].confusion++; totalConfusion++; }
+          }
+        }
+      }
+
+      const teamScores = Object.values(teamStats).map(s => {
+        const errorRate = s.total > 0 ? ((s.old + s.misuse + s.confusion) / s.total) * 100 : 0;
+        return Math.max(0, Math.round(100 - errorRate));
+      });
+      const syncScore = teamScores.length > 0 ? Math.round(teamScores.reduce((a, b) => a + b, 0) / teamScores.length) : 0;
+      const needTeamCount = teamScores.filter(s => s < 75).length;
+
+      const totalClassifiedWrong = totalOld + totalMisuse + totalConfusion;
+      return {
+        syncScore,
+        termRate: totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0,
+        oldRate: totalClassifiedWrong > 0 ? Math.round((totalOld / totalClassifiedWrong) * 100) : 0,
+        misuseRate: totalClassifiedWrong > 0 ? Math.round((totalMisuse / totalClassifiedWrong) * 100) : 0,
+        confusionRate: totalClassifiedWrong > 0 ? Math.round((totalConfusion / totalClassifiedWrong) * 100) : 0,
+        needTeamCount
+      };
+    }
+
+    function renderSyncImprovement() {
+      const before = computeSyncMetrics(state.data.originalAttempts);
+      const after = computeSyncMetrics(state.data.attempts);
+      const cards = [
+        { label: '전체 싱크 점수 변화', value: `${before.syncScore} → ${after.syncScore}점`, note: `${after.syncScore >= before.syncScore ? '+' : ''}${Number((after.syncScore - before.syncScore).toFixed(1))}점` },
+        { label: '기준·용어 정답률', value: `${before.termRate}% → ${after.termRate}%`, note: '공식 명칭·금지 표현' },
+        { label: '구버전 기준 선택 감소', value: `${before.oldRate}% → ${after.oldRate}%`, note: `-${Math.max(0, Number((before.oldRate - after.oldRate).toFixed(1)))}%p` },
+        { label: '비공식·오용어 감소', value: `${before.misuseRate}% → ${after.misuseRate}%`, note: `-${Math.max(0, Number((before.misuseRate - after.misuseRate).toFixed(1)))}%p` },
+        { label: '유사 기능 혼동 감소', value: `${before.confusionRate}% → ${after.confusionRate}%`, note: `-${Math.max(0, Number((before.confusionRate - after.confusionRate).toFixed(1)))}%p` },
+        { label: '검토 필요 팀', value: `${after.needTeamCount}개`, note: '싱크 점수 75점 미만' }
+      ];
+      document.getElementById('section-sync-metrics').innerHTML = cards.map(c => `
+        <div class="metric-card">
+          <span class="metric-label">${c.label}</span>
+          <div class="metric-value">${c.value}</div>
+          <div class="metric-note">${c.note}</div>
+        </div>
+      `).join('');
+    }
+
+    let chartTeamImprove = null;
+    function renderTeamRetake(metrics) {
+      const teams = metrics.teams;
+      const teamRetake = metrics.teamRetakeData || {};
+
+      // 팀별 평균 개선폭 차트 (매칭 페어 기준, 데이터 없으면 0으로 표시)
+      const improveValues = teams.map(t => teamRetake[t]?.improvement ?? 0);
+      destroyChart(chartTeamImprove);
+      const ctx = document.getElementById('chartTeamImprove').getContext('2d');
+      chartTeamImprove = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: teams,
+          datasets: [{
+            label: '평균 개선폭 (점)',
+            data: improveValues,
+            backgroundColor: improveValues.map(v => v >= 0 ? '#09B836' : '#E20000'),
+            borderRadius: 6,
+            maxBarThickness: 40
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true } }
+        }
+      });
+
+      // 잔여 리스크 메모 (팀별 재시험 후에도 위험군인 인원 수)
+      const riskBarHtml = teams.map(t => {
+        const remain = teamRetake[t]?.riskRemain ?? 0;
+        const tone = remain >= 2 ? 'danger' : remain === 1 ? 'warning' : 'success';
+        const pct = Math.min(remain / 3 * 100, 100);
+        const color = tone === 'danger' ? '#E20000' : tone === 'warning' ? '#F97316' : '#09B836';
+        return `
+          <div class="mini-bar-item">
+            <span class="mini-bar-item__label">${t} 잔여</span>
+            <div class="mini-bar-item__track"><div class="mini-bar-item__fill" style="width:${pct}%; background:${color};"></div></div>
+            <span class="mini-bar-item__value">${remain}명</span>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('retakeRiskBarList').innerHTML = riskBarHtml;
+
+      // 팀별 개선 대시보드 테이블
+      const tbody = teams.map(t => {
+        const r = teamRetake[t] || {};
+        const improvementCell = r.improvement !== null && r.improvement !== undefined
+          ? `<span style="color:${r.improvement >= 0 ? '#09B836' : '#E20000'}; font-weight:600;">${r.improvement >= 0 ? '+' : ''}${r.improvement}점</span>`
+          : '—';
+        return `
+          <tr>
+            <td>${t}</td>
+            <td>${r.target ?? 0}명</td>
+            <td>${r.completed ?? 0}명</td>
+            <td>${r.beforeAverage !== null && r.beforeAverage !== undefined ? r.beforeAverage + '점' : '—'}</td>
+            <td>${r.afterAverage !== null && r.afterAverage !== undefined ? r.afterAverage + '점' : '—'}</td>
+            <td>${improvementCell}</td>
+            <td>${r.convertedPass ?? 0}명</td>
+            <td>${r.weakDomain || '—'}</td>
+            <td><button class="btn btn-sm" onclick="toggleTeamAccordion('${t}')">상세</button></td>
+          </tr>
+        `;
+      }).join('');
+      document.getElementById('teamRetakeSummaryBody').innerHTML = tbody || '<tr><td colspan="9" style="text-align:center; padding:20px; color:var(--text-muted);">재시험 데이터가 없습니다.</td></tr>';
+    }
+
+    function renderSection1(metrics) {
+      const isRetake = state.activeExamType === '재시험';
+      const html = `
+        <div class="kpi-card">
+          <div class="kpi-card__label">${isRetake ? '재시험 대상자 수' : '전체 평가 대상자 수'}</div>
+          <div class="kpi-card__value">${metrics.total}명</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-card__label">${isRetake ? '재응시 완료자 수' : '응시 완료자 수'}</div>
+          <div class="kpi-card__value">${metrics.completed}명</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-card__label">${isRetake ? '재시험 미응시자 수' : '미응시자 수'}</div>
+          <div class="kpi-card__value">${metrics.pending}명</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-card__label">${isRetake ? '재응시 완료율' : '응시 완료율'}</div>
+          <div class="kpi-card__value">${metrics.completionRate}%</div>
+        </div>
+        ${isRetake && metrics.retakeComparison ? `
+        <div class="kpi-card">
+          <div class="kpi-card__label">평균 개선폭</div>
+          <div class="kpi-card__value">${metrics.retakeComparison.averageImprovement >= 0 ? '+' : ''}${metrics.retakeComparison.averageImprovement}점</div>
+        </div>` : ''}
+      `;
+      document.getElementById('section1-kpis').innerHTML = html;
+    }
+
+    function renderSection2(metrics) {
+      const isRetake = state.activeExamType === '재시험' && metrics.retakeComparison;
+      const cards = isRetake ? [
+        { label: '재시험 전 평균', value: `${metrics.retakeComparison.beforeAverage}점`, note: '본시험 응시 당시 점수', action: null },
+        { label: '재시험 후 평균', value: `${metrics.averageScore}점`, note: '재응시 완료자 평균', action: null },
+        { label: '평균 개선폭', value: `${metrics.retakeComparison.averageImprovement >= 0 ? '+' : ''}${metrics.retakeComparison.averageImprovement}점`, note: '본시험 대비 변화', action: null },
+        { label: '합격 전환자 수', value: `${metrics.retakeComparison.convertedPassCount}명`, note: '불합격 → 합격 전환', action: 'converted' },
+        { label: '위험군 해제자 수', value: `${metrics.retakeComparison.riskReleasedCount}명`, note: '변경관리 위험군 해제', action: 'released' },
+        { label: 'Tier 0 잔존 과락자 수', value: `${metrics.tier0FailCount}명`, note: '재시험 후에도 미달', action: 'tier0' }
+      ] : [
+        { label: '평균 점수', value: `${metrics.averageScore}점`, note: '전체 응시자 평균', action: null },
+        { label: '합격률', value: `${metrics.passRate}%`, note: '합격선 75점 기준', action: null },
+        { label: '합격자 수', value: `${metrics.passCount}명`, note: '본시험 합격', action: 'passed' },
+        { label: '재시험 대상자 수', value: `${metrics.retakeCount}명`, note: '후속 학습 필요', action: 'retake' },
+        { label: 'Tier 0 과락자 수', value: `${metrics.tier0FailCount}명`, note: '전사 공통 필수 문항', action: 'tier0' },
+        { label: '위험군 플래그', value: `${metrics.riskCount}명`, note: '변경관리 기준', action: 'risk' }
+      ];
+
+      const html = cards.map(card => {
+        const clickable = card.action ? 'clickable' : '';
+        const onclick = card.action ? `onclick="showListModal('${card.action}')"` : '';
+        return `
+          <div class="metric-card ${clickable}" ${onclick}>
+            <span class="metric-label">${card.label}</span>
+            <div class="metric-value">${card.value}</div>
+            <div class="metric-note">${card.note}</div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('section2-metrics').innerHTML = html;
+    }
+
+    function renderSection3(metrics) {
+      const labels = metrics.teams;
+      const values = labels.map(t => metrics.teamData[t].avg);
+
+      createThresholdLineChart('chartTeamScore', labels, values, '평균 점수', '점', 75, 100);
+
+      const countAbove = labels.filter(t => metrics.teamData[t].avg >= 75).length;
+      const countBelow = labels.filter(t => metrics.teamData[t].avg < 75).length;
+      document.getElementById('count-above').textContent = countAbove;
+      document.getElementById('count-below').textContent = countBelow;
+
+      const scoreLaneHtml = labels.map(team => {
+        const diff = Number((metrics.teamData[team].avg - 75).toFixed(1));
+        const percentWidth = Math.min(metrics.teamData[team].avg, 100);
+        const failClass = metrics.teamData[team].avg < 75 ? 'fail' : '';
+        return `
+          <div class="score-lane">
+            <div class="score-lane__label">${team}</div>
+            <div class="score-track" aria-hidden="true">
+              <span class="score-fill ${failClass}" style="width:${percentWidth}%"></span>
+            </div>
+            <div class="score-lane__value">${diff >= 0 ? '+' : ''}${diff}점</div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('scoreLaneList').innerHTML = scoreLaneHtml;
+    }
+
+    function renderSection4(metrics) {
+      const labels = metrics.teams;
+      const rates = labels.map(t => metrics.teamData[t].rate);
+
+      destroyChart(chartTeamRate);
+      const ctxRate = document.getElementById('chartTeamRate').getContext('2d');
+      chartTeamRate = new Chart(ctxRate, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: '응시율 (%)',
+            data: rates,
+            backgroundColor: '#246FF4',
+            borderRadius: 6,
+            maxBarThickness: 40
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { min: 0, max: 100, grid: { color: 'var(--border-subtle)' }, ticks: { callback: v => v + '%' } },
+            y: { grid: { display: false }, ticks: { color: 'var(--text-secondary)' } }
+          }
+        }
+      });
+
+      const retakeBarHtml = labels.map(team => {
+        const retakeCount = metrics.teamData[team].retake;
+        const isRisk = retakeCount >= 3;
+        const bgColor = isRisk ? 'var(--danger-subtle)' : 'var(--warning-bg)';
+        const textColor = isRisk ? 'var(--danger)' : 'var(--warning-text)';
+        return `
+          <div style="display:flex; align-items:center; gap:10px; font-size:var(--fs-sm);">
+            <span style="min-width:100px; font-weight:600;">${team}</span>
+            <div style="flex:1; height:20px; background:var(--border-subtle); border-radius:4px; overflow:hidden;">
+              <div style="width:${Math.min(retakeCount * 20, 100)}%; height:100%; background:${textColor}; border-radius:4px;"></div>
+            </div>
+            <span style="min-width:30px; text-align:right; font-weight:600;">${retakeCount}명</span>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('retakeBarList').innerHTML = retakeBarHtml;
+
+      // Team summary table
+      const tableHtml = labels.map(team => {
+        const data = metrics.teamData[team];
+        const prevAvg = state.data.prevRoundTeamAvg ? state.data.prevRoundTeamAvg[team] : null;
+        const deltaCell = (prevAvg !== null && prevAvg !== undefined)
+          ? (() => {
+              const diff = data.avg - prevAvg;
+              const color = diff >= 0 ? 'var(--success)' : 'var(--danger)';
+              return `<span style="color:${color}; font-weight:600;">${diff >= 0 ? '+' : ''}${diff}점</span>`;
+            })()
+          : '—';
+        return `
+          <tr>
+            <td><strong>${team}</strong></td>
+            <td>${data.avg}점</td>
+            <td>${data.completed > 0 ? Math.round(data.scores.filter(s => s >= 75).length / data.completed * 100) : 0}%</td>
+            <td>${data.rate}%</td>
+            <td>${data.weakDomain || '—'}</td>
+            <td>${data.retake}명</td>
+            <td>${calculateTeamRisk(team, metrics)}명</td>
+            <td>${deltaCell}</td>
+            <td><button class="btn btn-sm" onclick="toggleTeamAccordion('${team}')">상세보기</button></td>
+          </tr>
+        `;
+      }).join('');
+
+      document.getElementById('teamSummaryBody').innerHTML = tableHtml;
+    }
+
+    function calculateTeamRisk(team, metrics) {
+      const riskThreshold = state.data.settings.policy_risk_wrong_rate?.value || 40;
+      let count = 0;
+      for (const att of metrics.teamData[team].attempts) {
+        if (!att.answers) continue;
+        const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+        let wrongCount = 0, totalCount = 0;
+        for (const qid in answers) {
+          const ans = answers[qid];
+          if (ans && ans.correct !== undefined) {
+            totalCount++;
+            if (!ans.correct) wrongCount++;
+          }
+        }
+        if (totalCount > 0 && (wrongCount / totalCount * 100) >= riskThreshold) {
+          count++;
+        }
+      }
+      return count;
+    }
+
+    function toggleTeamAccordion(team) {
+      const container = document.getElementById('teamDetailAccordionContainer');
+
+      if (activeAccordionTeam === team) {
+        container.innerHTML = '';
+        activeAccordionTeam = null;
+      } else {
+        activeAccordionTeam = team;
+        renderTeamAccordion(team);
+      }
+    }
+
+    function renderTeamAccordion(team) {
+      const metrics = calculateMetrics();
+      const data = metrics.teamData[team];
+      const riskThreshold = state.data.settings.policy_risk_wrong_rate?.value || 40;
+
+      let riskMembers = [];
+      for (const att of data.attempts) {
+        if (!att.answers) continue;
+        const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+        let wrongCount = 0, totalCount = 0;
+        for (const qid in answers) {
+          const ans = answers[qid];
+          if (ans && ans.correct !== undefined) {
+            totalCount++;
+            if (!ans.correct) wrongCount++;
+          }
+        }
+        if (totalCount > 0 && (wrongCount / totalCount * 100) >= riskThreshold) {
+          riskMembers.push(att);
+        }
+      }
+
+      let retakeMembers = data.attempts.filter(a => !a.passed);
+
+      const html = `
+        <div class="team-detail-accordion">
+          <div class="accordion-header" onclick="this.nextElementSibling.classList.toggle('open'); this.querySelector('.accordion-toggle').classList.toggle('collapsed');">
+            <h3 class="accordion-header__title">
+              ${team} 상세
+              <div class="accordion-header__badges">
+                <span class="badge badge--info">팀 평균 ${data.avg}점</span>
+              </div>
+            </h3>
+            <div class="accordion-toggle">▼</div>
+          </div>
+          <div class="accordion-body open">
+            <div class="team-detail-summary">
+              <div class="summary-item">
+                <div class="summary-item__label">팀 평균 점수</div>
+                <div class="summary-item__value">${data.avg}점</div>
+              </div>
+              <div class="summary-item">
+                <div class="summary-item__label">합격률</div>
+                <div class="summary-item__value">${data.completed > 0 ? Math.round(data.scores.filter(s => s >= 75).length / data.completed * 100) : 0}%</div>
+              </div>
+              <div class="summary-item">
+                <div class="summary-item__label">응시율</div>
+                <div class="summary-item__value">${data.rate}%</div>
+              </div>
+              <div class="summary-item">
+                <div class="summary-item__label">취약 영역</div>
+                <div class="summary-item__value">${data.weakDomain || '—'}</div>
+              </div>
+            </div>
+
+            <div class="team-detail-grid">
+              <div class="team-detail-chart">
+                <h4>카테고리별 평균 점수</h4>
+                <canvas id="teamCategoryChart_${team.replace(/\s+/g, '_')}" style="max-height:200px;"></canvas>
+              </div>
+              <div class="team-detail-chart">
+                <h4>5대 역량축별 평균 점수</h4>
+                <canvas id="teamCompetencyChart_${team.replace(/\s+/g, '_')}" style="max-height:200px;"></canvas>
+              </div>
+            </div>
+
+            <div style="margin-top:20px;">
+              <h4>취약 문항 TOP 5</h4>
+              <table class="weak-items-table">
+                <thead>
+                  <tr>
+                    <th>문항ID</th>
+                    <th>문항 내용</th>
+                    <th>카테고리</th>
+                    <th>역량</th>
+                    <th>정답률</th>
+                    <th>상세</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${(() => {
+                    const weakQuestions = getTeamWeakQuestions(team, metrics);
+                    if (weakQuestions.length === 0) {
+                      return '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-muted);">응답 데이터가 없습니다.</td></tr>';
+                    }
+                    return weakQuestions.map(x => `
+                      <tr>
+                        <td>${x.q.qid || '-'}</td>
+                        <td style="max-width:220px; white-space:normal;">${(x.q.question_text || '').substring(0, 40)}...</td>
+                        <td>${x.q.domain || '-'}</td>
+                        <td>${AXIS_LABELS[x.q.axis - 1] || '-'}</td>
+                        <td>${x.rate}%</td>
+                        <td><button class="btn btn-sm" onclick="openQuestionDetail('${x.q.id}')">상세</button></td>
+                      </tr>
+                    `).join('');
+                  })()}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="team-detail-grid" style="margin-top:20px;">
+              <div>
+                <h4 style="margin-bottom:12px;">재시험 대상자</h4>
+                <div class="table-wrap">
+                  <table class="retake-list">
+                    <thead><tr><th>이름</th><th>점수</th></tr></thead>
+                    <tbody>
+                      ${retakeMembers.map(att => `<tr><td>${metrics.emailToName[att.user_email] || att.user_email}</td><td>${att.score}점</td></tr>`).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div>
+                <h4 style="margin-bottom:12px;">위험군 대상자</h4>
+                <div class="table-wrap">
+                  <table class="retake-list">
+                    <thead><tr><th>이름</th><th>점수</th></tr></thead>
+                    <tbody>
+                      ${riskMembers.map(att => `<tr><td>${metrics.emailToName[att.user_email] || att.user_email}</td><td>${att.score}점</td></tr>`).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('teamDetailAccordionContainer').innerHTML = html;
+
+      // Draw charts after DOM is ready
+      requestAnimationFrame(() => {
+        drawTeamDetailCharts(team);
+      });
+    }
+
+    function drawTeamDetailCharts(team) {
+      const metrics = calculateMetrics();
+      const teamInfo = metrics.teamData[team];
+
+      const domains = Object.keys(teamInfo.domainStats);
+      const domainValues = domains.map(d => {
+        const s = teamInfo.domainStats[d];
+        return s.total > 0 ? Math.round(s.correct / s.total * 100) : 0;
+      });
+
+      const axesPresent = Object.keys(teamInfo.axisStats).map(Number).sort((a, b) => a - b);
+      const axisLabels = axesPresent.map(a => AXIS_LABELS[a - 1] || ('역량' + a));
+      const axisValues = axesPresent.map(a => {
+        const s = teamInfo.axisStats[a];
+        return s.total > 0 ? Math.round(s.correct / s.total * 100) : 0;
+      });
+
+      const canvasId1 = `teamCategoryChart_${team.replace(/\s+/g, '_')}`;
+      const canvasId2 = `teamCompetencyChart_${team.replace(/\s+/g, '_')}`;
+
+      createSimpleChart(canvasId1, domains, domainValues, '점');
+      createSimpleChart(canvasId2, axisLabels, axisValues, '점');
+    }
+
+    // 팀별 취약 문항 TOP5 — 그 팀 응시자들의 실제 오답 데이터 기반
+    function getTeamWeakQuestions(team, metrics) {
+      const stats = {};
+      for (const att of metrics.teamData[team].attempts) {
+        if (!att.answers) continue;
+        const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+        for (const qid in answers) {
+          const ans = answers[qid];
+          if (ans.correct === undefined) continue;
+          if (!stats[qid]) stats[qid] = { correct: 0, total: 0 };
+          stats[qid].total++;
+          if (ans.correct) stats[qid].correct++;
+        }
+      }
+      return Object.entries(stats)
+        .map(([qid, s]) => ({
+          q: metrics.qMap[qid],
+          rate: s.total > 0 ? Math.round(s.correct / s.total * 100) : 0,
+          total: s.total
+        }))
+        .filter(x => x.q && x.total > 0)
+        .sort((a, b) => a.rate - b.rate)
+        .slice(0, 5);
+    }
+
+    // 문항 상세 모달 — 보기별 선택 비율 + option_tags + 오답자 목록
+    function openQuestionDetail(qid) {
+      const metrics = calculateMetrics();
+      const q = metrics.qMap[qid];
+      if (!q) return;
+
+      const options = q.options || [];
+      const optionCounts = options.map(() => 0);
+      const wrongEmails = [];
+      for (const att of state.data.attempts) {
+        if (!att.answers) continue;
+        const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+        const ans = answers[qid];
+        if (!ans) continue;
+        if (ans.selected !== null && ans.selected !== undefined && optionCounts[ans.selected] !== undefined) {
+          optionCounts[ans.selected]++;
+        }
+        if (ans.correct === false) wrongEmails.push(att.user_email);
+      }
+      const total = optionCounts.reduce((a, b) => a + b, 0);
+
+      document.getElementById('questionDetailTitle').textContent = `문항 상세 · ${q.qid || ''}`;
+      document.getElementById('questionDetailBody').innerHTML = `
+        <div style="margin-bottom:16px;">
+          <div style="display:flex; gap:6px; margin-bottom:8px;">
+            <span class="badge badge--info">${q.domain || '-'}</span>
+            ${q.axis ? `<span class="badge badge--neutral">${AXIS_LABELS[q.axis - 1] || '역량' + q.axis}</span>` : ''}
+            <span class="badge badge--neutral">Tier ${q.tier}</span>
+          </div>
+          <p style="font-weight:600;">${q.question_text || ''}</p>
+        </div>
+        <div style="margin-bottom:16px;">
+          <h4 style="margin:0 0 8px; font-weight:600;">보기별 선택 비율</h4>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            ${options.map((opt, i) => {
+              const pct = total > 0 ? Math.round(optionCounts[i] / total * 100) : 0;
+              const isCorrect = i === q.correct_index;
+              const tag = (q.option_tags && q.option_tags[i]) || '';
+              return `
+                <div>
+                  <div style="display:flex; justify-content:space-between; font-size:var(--fs-sm); margin-bottom:4px;">
+                    <span>${String.fromCharCode(65 + i)}) ${opt} ${isCorrect ? '✓ 정답' : ''}</span>
+                    <span style="color:var(--text-tertiary);">${optionCounts[i]}명 (${pct}%)</span>
+                  </div>
+                  <div style="height:6px; background:var(--border-subtle); border-radius:3px; overflow:hidden;">
+                    <div style="height:100%; width:${pct}%; background:${isCorrect ? 'var(--success)' : 'var(--accent)'};"></div>
+                  </div>
+                  ${tag ? `<div style="font-size:var(--fs-xs); color:var(--text-tertiary); margin-top:2px;">${tag}</div>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        <div>
+          <h4 style="margin:0 0 8px; font-weight:600;">오답자 (${wrongEmails.length}명)</h4>
+          <div style="font-size:var(--fs-xs); max-height:100px; overflow-y:auto; background:var(--surface-sunken); padding:8px; border-radius:var(--radius-sm); word-break:break-all;">
+            ${wrongEmails.slice(0, 15).map(e => metrics.emailToName[e] || e).join(', ')}${wrongEmails.length > 15 ? ' 외 ' + (wrongEmails.length - 15) + '명' : ''}
+          </div>
+        </div>
+      `;
+      document.getElementById('modalQuestionDetail').showModal();
+    }
+
+    function createSimpleChart(canvasId, labels, values, unit) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+
+      if (allCharts[canvasId]) allCharts[canvasId].destroy();
+
+      const ctx = canvas.getContext('2d');
+      allCharts[canvasId] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: unit,
+            data: values,
+            backgroundColor: '#246FF4',
+            borderRadius: 4,
+            maxBarThickness: 40
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { min: 0, max: 100, grid: { color: 'var(--border-subtle)' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    }
+
+    function showListModal(type) {
+      const metrics = calculateMetrics();
+      let title, data;
+
+      if (type === 'passed') {
+        title = '합격자 명단';
+        data = metrics.completedAttempts.filter(a => a.passed).map(a => ({
+          name: metrics.emailToName[a.user_email] || a.user_email,
+          team: metrics.emailToTeam[a.user_email] || '-',
+          score: a.score
+        }));
+      } else if (type === 'retake') {
+        title = '재시험 대상자 명단';
+        data = metrics.completedAttempts.filter(a => !a.passed).map(a => ({
+          name: metrics.emailToName[a.user_email] || a.user_email,
+          team: metrics.emailToTeam[a.user_email] || '-',
+          score: a.score
+        }));
+      } else if (type === 'tier0') {
+        title = 'Tier 0 과락자 명단';
+        const tier0Questions = state.data.questions.filter(q => q.tier === 0);
+        data = [];
+        for (const att of metrics.completedAttempts) {
+          if (!att.answers) continue;
+          const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+          const tier0Answers = tier0Questions.map(q => answers[q.id]).filter(Boolean);
+          if (tier0Answers.length > 0) {
+            const tier0Correct = tier0Answers.filter(a => a.correct).length;
+            if (tier0Correct / tier0Answers.length < 0.9) {
+              data.push({
+                name: metrics.emailToName[att.user_email] || att.user_email,
+                team: metrics.emailToTeam[att.user_email] || '-',
+                score: att.score
+              });
+            }
+          }
+        }
+      } else if (type === 'risk') {
+        title = '위험군 대상자 명단';
+        const riskThreshold = state.data.settings.policy_risk_wrong_rate?.value || 40;
+        data = [];
+        for (const att of metrics.completedAttempts) {
+          if (!att.answers) continue;
+          const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+          let wrongCount = 0, totalCount = 0;
+          for (const qid in answers) {
+            const ans = answers[qid];
+            if (ans && ans.correct !== undefined) {
+              totalCount++;
+              if (!ans.correct) wrongCount++;
+            }
+          }
+          if (totalCount > 0 && (wrongCount / totalCount * 100) >= riskThreshold) {
+            data.push({
+              name: metrics.emailToName[att.user_email] || att.user_email,
+              team: metrics.emailToTeam[att.user_email] || '-',
+              score: att.score
+            });
+          }
+        }
+      } else if (type === 'converted' || type === 'released') {
+        title = type === 'converted' ? '합격 전환자 명단' : '위험군 해제자 명단';
+        const riskThreshold = state.data.settings.policy_risk_wrong_rate?.value || 40;
+        const originalLatest = {};
+        for (const att of state.data.originalAttempts) {
+          if (!att.submitted_at) continue;
+          const key = att.user_email;
+          if (!originalLatest[key] || new Date(att.created_at) > new Date(originalLatest[key].created_at)) {
+            originalLatest[key] = att;
+          }
+        }
+        const wrongRateOf = (att) => {
+          if (!att.answers) return 0;
+          const answers = typeof att.answers === 'string' ? JSON.parse(att.answers) : att.answers;
+          let wrong = 0, total = 0;
+          for (const qid in answers) {
+            const ans = answers[qid];
+            if (ans && ans.correct !== undefined) { total++; if (!ans.correct) wrong++; }
+          }
+          return total > 0 ? (wrong / total * 100) : 0;
+        };
+        data = [];
+        for (const att of metrics.completedAttempts) {
+          const orig = originalLatest[att.user_email];
+          if (!orig) continue;
+          const matches = type === 'converted'
+            ? (!orig.passed && att.passed)
+            : (wrongRateOf(orig) >= riskThreshold && wrongRateOf(att) < riskThreshold);
+          if (matches) {
+            data.push({
+              name: metrics.emailToName[att.user_email] || att.user_email,
+              team: metrics.emailToTeam[att.user_email] || '-',
+              score: att.score
+            });
+          }
+        }
+      }
+
+      const thead = '<tr><th>이름</th><th>팀</th><th>점수</th></tr>';
+      const tbody = (data || []).map(row => `<tr><td>${row.name}</td><td>${row.team}</td><td>${row.score}점</td></tr>`).join('');
+
+      document.getElementById('modalListTitle').textContent = title;
+      document.getElementById('detailListHead').innerHTML = thead;
+      document.getElementById('detailListBody').innerHTML = tbody;
+      document.getElementById('modalListDetail').showModal();
+    }
+
+    function attachEventListeners() {
+      document.getElementById('btn-view-pending').addEventListener('click', showPendingList);
+      document.getElementById('btn-send-pending').addEventListener('click', sendPendingNotice);
+    }
+
+    function getPendingBaseEmails(metrics) {
+      if (state.activeExamType !== '재시험') return state.data.targets;
+      const originalLatest = {};
+      for (const att of state.data.originalAttempts) {
+        if (!att.submitted_at) continue;
+        const key = att.user_email;
+        if (!originalLatest[key] || new Date(att.created_at) > new Date(originalLatest[key].created_at)) {
+          originalLatest[key] = att;
+        }
+      }
+      return Object.values(originalLatest).filter(o => !o.passed).map(o => o.user_email);
+    }
+
+    async function showPendingList() {
+      const metrics = calculateMetrics();
+      const submitted = metrics.latestAttempts.filter(a => a.submitted_at).map(a => a.user_email);
+      const pending = getPendingBaseEmails(metrics).filter(e => !submitted.includes(e));
+
+      const { data: noticeLog } = await AUTH.sb
+        .from('exam_notice_log')
+        .select('email')
+        .eq('round_id', state.activeRoundId);
+
+      const noticeSet = new Set((noticeLog || []).map(n => n.email));
+
+      const html = pending.map(email => {
+        const sent = noticeSet.has(email);
+        return `
+          <tr>
+            <td>${metrics.emailToName[email] || email}</td>
+            <td>${metrics.emailToTeam[email] || '-'}</td>
+            <td>${sent ? '<span class="badge badge--success">발송 완료</span>' : '<span class="badge badge--warning">미발송</span>'}</td>
+          </tr>
+        `;
+      }).join('');
+
+      document.getElementById('pendingListBody').innerHTML = html;
+      document.getElementById('modalPendingList').showModal();
+    }
+
+    async function sendPendingNotice() {
+      const metrics = calculateMetrics();
+      const submitted = metrics.latestAttempts.filter(a => a.submitted_at).map(a => a.user_email);
+      const pending = getPendingBaseEmails(metrics).filter(e => !submitted.includes(e));
+
+      const { data: existingLog } = await AUTH.sb
+        .from('exam_notice_log')
+        .select('email')
+        .eq('round_id', state.activeRoundId);
+
+      const existingSet = new Set((existingLog || []).map(n => n.email));
+      const toSend = pending.filter(e => !existingSet.has(e));
+
+      if (toSend.length === 0) {
+        alert('모든 미응시자에게 이미 알림이 발송되었습니다.');
+        return;
+      }
+
+      const records = toSend.map(email => ({
+        round_id: state.activeRoundId,
+        email,
+        sent_at: new Date().toISOString()
+      }));
+
+      await AUTH.sb.from('exam_notice_log').insert(records);
+
+      await AUTH.sb.from('admin_audit_log').insert({
+        actor_email: (await AUTH.sb.auth.getSession()).data.session.user.email,
+        action: 'exam.notice_sent',
+        detail: `미응시자 ${toSend.length}명에게 독려 알림 발송`
+      });
+
+      alert(`${toSend.length}명의 미응시자에게 알림이 발송되었습니다.`);
+      await renderPage();
+    }
+
+    function createThresholdLineChart(canvasId, labels, values, label, unit, threshold, max) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+
+      const thresholdPlugin = {
+        id: `${canvasId}ThresholdLine`,
+        afterDraw(chart) {
+          const { ctx, chartArea, scales } = chart;
+          if (!chartArea || !scales.y) return;
+
+          const y = scales.y.getPixelForValue(threshold);
+          ctx.save();
+          ctx.setLineDash([8, 7]);
+          ctx.strokeStyle = '#E20000';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(chartArea.left, y);
+          ctx.lineTo(chartArea.right, y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          const text = `기준선 ${threshold}${unit}`;
+          ctx.font = '700 12px -apple-system, BlinkMacSystemFont, sans-serif';
+          const metrics = ctx.measureText(text);
+          const width = metrics.width + 14;
+          const height = 24;
+          const x = Math.max(chartArea.left + 6, chartArea.right - width - 6);
+          const labelY = Math.max(chartArea.top + 2, y - height / 2);
+
+          ctx.fillStyle = '#E20000';
+          if (ctx.roundRect) {
+            ctx.beginPath();
+            ctx.roundRect(x, labelY, width, height, 4);
+            ctx.fill();
+          } else {
+            ctx.fillRect(x, labelY, width, height);
+          }
+
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(text, x + width / 2, labelY + height / 2);
+          ctx.restore();
+        }
+      };
+
+      destroyChart(allCharts[canvasId]);
+      const ctx = canvas.getContext('2d');
+      allCharts[canvasId] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label,
+            data: values,
+            backgroundColor: values.map(v => v >= threshold ? '#246FF4' : '#E20000'),
+            borderRadius: 6,
+            maxBarThickness: 60
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}${unit}` } }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: 'var(--text-secondary)', font: { size: 12, weight: 600 } } },
+            y: { min: 0, max, grid: { color: 'var(--border-subtle)' }, ticks: { stepSize: 20, callback: v => v } }
+          }
+        },
+        plugins: [thresholdPlugin]
+      });
+    }
+
+    function destroyChart(chart) {
+      if (chart) chart.destroy();
+    }
+  </script>
+</body>
+</html>

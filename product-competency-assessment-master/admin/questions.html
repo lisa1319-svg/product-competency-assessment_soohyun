@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>문항 관리</title>
+<link rel="stylesheet" href="/shared/admin-design.css">
+</head>
+<body>
+<div class="shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <header class="topbar" id="topbar"></header>
+  <main class="main"><div class="content">
+    <div class="page-head"><div>
+      <h1 class="page-title">문항 관리</h1>
+      <p class="page-desc">평가 문항을 생성, 수정, 삭제하고 상태를 관리합니다</p>
+    </div></div>
+    <div id="page-content"></div>
+  </div></main>
+</div>
+
+<dialog id="question-modal" class="modal">
+  <div class="modal-head">
+    <h3 id="modal-title">새 문항</h3>
+    <button class="modal-close" onclick="closeQuestionModal()">&times;</button>
+  </div>
+  <div class="modal-body">
+    <form id="question-form" onsubmit="handleSaveQuestion(event)">
+      <input type="hidden" id="form-id">
+      <div class="field-row">
+        <label class="field-label">문항 ID <span class="req">(qid)</span></label>
+        <div class="field-value">
+          <input type="text" id="form-qid" class="input" placeholder="예: B01">
+        </div>
+      </div>
+      <div class="field-row">
+        <label class="field-label">영역 <span class="req">*</span></label>
+        <div class="field-value">
+          <select id="form-domain" class="input" required>
+            <option value="">선택</option>
+            <option value="기본 IT 용어">기본 IT 용어</option>
+            <option value="POS 자동연동">POS 자동연동</option>
+            <option value="티오더 AI">티오더 AI</option>
+            <option value="계약·재계약·분쟁">계약·재계약·분쟁</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <label class="field-label">Tier <span class="req">*</span></label>
+        <div class="field-value">
+          <select id="form-tier" class="input" required>
+            <option value="">선택</option>
+            <option value="0">0 - 전사공통</option>
+            <option value="1">1 - 클러스터공통</option>
+            <option value="2">2 - 팀별</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <label class="field-label">역량축</label>
+        <div class="field-value">
+          <select id="form-axis" class="input">
+            <option value="">선택</option>
+            <option value="1">1 - 프로덕트·기능 이해</option>
+            <option value="2">2 - 내부 용어 싱크</option>
+            <option value="3">3 - 고객 설명 가능성</option>
+            <option value="4">4 - 최신 업데이트 숙지</option>
+            <option value="5">5 - 필수사항 누락 방지</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <label class="field-label">문항 유형 <span class="req">*</span></label>
+        <div class="field-value">
+          <select id="form-type" class="input" onchange="updateFormForType()" required>
+            <option value="">선택</option>
+            <option value="multiple_choice">객관식 (4지선다)</option>
+            <option value="short_answer">단답형</option>
+            <option value="essay">서술형</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <label class="field-label">문항 내용 <span class="req">*</span></label>
+        <div class="field-value">
+          <textarea id="form-question" class="input" required style="min-height:120px;"></textarea>
+        </div>
+      </div>
+
+      <div id="options-section" style="display:none;">
+        <div class="field-row">
+          <label class="field-label">보기 및 오답 태그 <span class="req">*</span></label>
+          <div class="field-value">
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div style="display:grid; grid-template-columns:1fr 140px; gap:8px;">
+                <input type="text" class="input" data-option-index="0" placeholder="① 보기 1">
+                <select class="input" data-tag-index="0">
+                  <option value="">태그 선택</option>
+                  <option value="정답">정답</option>
+                  <option value="구버전 정책">구버전 정책</option>
+                  <option value="타 팀 용어">타 팀 용어</option>
+                  <option value="유사 기능 혼동">유사 기능 혼동</option>
+                  <option value="완전 무관">완전 무관</option>
+                </select>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 140px; gap:8px;">
+                <input type="text" class="input" data-option-index="1" placeholder="② 보기 2">
+                <select class="input" data-tag-index="1">
+                  <option value="">태그 선택</option>
+                  <option value="정답">정답</option>
+                  <option value="구버전 정책">구버전 정책</option>
+                  <option value="타 팀 용어">타 팀 용어</option>
+                  <option value="유사 기능 혼동">유사 기능 혼동</option>
+                  <option value="완전 무관">완전 무관</option>
+                </select>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 140px; gap:8px;">
+                <input type="text" class="input" data-option-index="2" placeholder="③ 보기 3">
+                <select class="input" data-tag-index="2">
+                  <option value="">태그 선택</option>
+                  <option value="정답">정답</option>
+                  <option value="구버전 정책">구버전 정책</option>
+                  <option value="타 팀 용어">타 팀 용어</option>
+                  <option value="유사 기능 혼동">유사 기능 혼동</option>
+                  <option value="완전 무관">완전 무관</option>
+                </select>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 140px; gap:8px;">
+                <input type="text" class="input" data-option-index="3" placeholder="④ 보기 4">
+                <select class="input" data-tag-index="3">
+                  <option value="">태그 선택</option>
+                  <option value="정답">정답</option>
+                  <option value="구버전 정책">구버전 정책</option>
+                  <option value="타 팀 용어">타 팀 용어</option>
+                  <option value="유사 기능 혼동">유사 기능 혼동</option>
+                  <option value="완전 무관">완전 무관</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="field-row">
+          <label class="field-label">정답 <span class="req">*</span></label>
+          <div class="field-value">
+            <select id="form-correct-index" class="input" required>
+              <option value="">선택</option>
+              <option value="0">① 보기 1</option>
+              <option value="1">② 보기 2</option>
+              <option value="2">③ 보기 3</option>
+              <option value="3">④ 보기 4</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <label class="field-label">상태</label>
+        <div class="field-value">
+          <select id="form-status" class="input">
+            <option value="draft">초안</option>
+            <option value="published">발행</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <label class="field-label">메모 (R&D 확정 대기 등)</label>
+        <div class="field-value">
+          <textarea id="form-source-note" class="input" style="min-height:80px;"></textarea>
+        </div>
+      </div>
+    </form>
+  </div>
+  <div class="modal-foot">
+    <button class="btn btn-outline" onclick="closeQuestionModal()">취소</button>
+    <button class="btn btn-primary" onclick="document.getElementById('question-form').dispatchEvent(new Event('submit'))">저장</button>
+  </div>
+</dialog>
+
+<dialog id="bulk-import-modal" class="modal modal--lg">
+  <div class="modal-head">
+    <h3>시트로 문항 일괄 등록</h3>
+    <button class="modal-close" onclick="closeBulkImportModal()">&times;</button>
+  </div>
+  <div class="modal-body">
+    <div class="notice-callout" style="margin-bottom: 14px;">
+      <svg class="ic"><circle cx="9" cy="9" r="8" fill="none"/><path d="M9 5v5M9 12v1"/></svg>
+      <div>
+        구글시트에 아래 14개 열 순서로 문항을 정리한 뒤, 헤더 행을 포함해서 그대로 복사(Cmd+C)하여 아래 칸에 붙여넣으세요(Cmd+V). 탭으로 구분된 형식만 지원하며, 첫 줄(헤더)은 자동으로 무시됩니다.<br>
+        <strong>qid · 영역 · Tier(0/1/2) · 역량축(1~5, 선택) · 문항내용 · 보기1 · 보기2 · 보기3 · 보기4 · 정답번호(1~4) · 보기1태그 · 보기2태그 · 보기3태그 · 보기4태그</strong><br>
+        보기3·4와 태그는 비워도 됩니다. 태그는 "정답/구버전 정책/타 팀 용어/유사 기능 혼동/완전 무관" 중 하나이며, 정답 보기의 태그는 비워두면 자동으로 "정답"이 채워집니다. 등록된 문항은 모두 <strong>초안(draft)</strong> 상태로 들어가며 검토 후 발행하면 됩니다.
+      </div>
+    </div>
+    <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+      <button type="button" class="btn btn-outline btn-sm" onclick="copyBulkTemplateHeader()">헤더 행 복사</button>
+    </div>
+    <textarea id="bulk-import-textarea" class="input" style="min-height:160px; font-family: ui-monospace, monospace; font-size:12px;" placeholder="여기에 구글시트에서 복사한 내용을 붙여넣으세요 (탭 구분, 헤더 행 포함)"></textarea>
+    <div style="margin-top:10px;">
+      <button type="button" class="btn btn-outline btn-sm" onclick="previewBulkImport()">미리보기</button>
+    </div>
+    <div id="bulk-import-preview" style="margin-top:14px;"></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn btn-outline" onclick="closeBulkImportModal()">취소</button>
+    <button class="btn btn-primary" id="bulk-import-submit-btn" onclick="submitBulkImport()" disabled>일괄 등록</button>
+  </div>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/shared/config.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/shared/nav.js"></script>
+<script>
+let allQuestions = []
+let allAttempts = []
+
+async function init() {
+  const auth = await AUTH.requirePage({admin: true})
+  if (!auth) return
+
+  renderAdminShell({
+    role: auth.role,
+    current: '/admin/questions.html',
+    email: auth.email,
+    rounds: [],
+    sidebarMount: 'sidebar',
+    topbarMount: 'topbar'
+  })
+
+  await loadQuestions()
+  await loadAttempts()
+  renderQuestionsPage()
+}
+
+async function loadQuestions() {
+  const {data} = await AUTH.sb.from('questions').select('*').order('created_at', {ascending: false})
+  allQuestions = data || []
+}
+
+async function loadAttempts() {
+  const {data} = await AUTH.sb.from('exam_attempts').select('*')
+  allAttempts = data || []
+}
+
+function renderQuestionsPage() {
+  const pageHtml = `
+    <div class="panel">
+      <div class="panel-head">
+        <h2>문항 목록</h2>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-outline btn-sm" onclick="openBulkImportModal()">시트로 일괄 등록</button>
+          <button class="btn btn-primary btn-sm" onclick="openCreateQuestionModal()">+ 새 문항</button>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; padding:20px 20px 0 20px;">
+        <select id="filter-status" class="input" style="max-width:150px;" onchange="renderFilteredQuestions()">
+          <option value="">상태: 모두</option>
+          <option value="draft">초안</option>
+          <option value="published">발행</option>
+        </select>
+        <select id="filter-domain" class="input" style="max-width:180px;" onchange="renderFilteredQuestions()">
+          <option value="">영역: 모두</option>
+          <option value="기본 IT 용어">기본 IT 용어</option>
+          <option value="POS 자동연동">POS 자동연동</option>
+          <option value="티오더 AI">티오더 AI</option>
+          <option value="계약·재계약·분쟁">계약·재계약·분쟁</option>
+        </select>
+        <select id="filter-tier" class="input" style="max-width:150px;" onchange="renderFilteredQuestions()">
+          <option value="">Tier: 모두</option>
+          <option value="0">0 - 전사공통</option>
+          <option value="1">1 - 클러스터공통</option>
+          <option value="2">2 - 팀별</option>
+        </select>
+      </div>
+      <div class="table-wrap" style="margin-top:12px;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>영역</th>
+              <th>Tier</th>
+              <th>역량축</th>
+              <th>문항 내용</th>
+              <th>정답률</th>
+              <th>상태</th>
+              <th style="width:120px;">작업</th>
+            </tr>
+          </thead>
+          <tbody id="questions-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    ${allAttempts.length > 0 ? renderTop5Chart() : ''}
+  `
+  document.getElementById('page-content').innerHTML = pageHtml
+  renderFilteredQuestions()
+}
+
+function renderFilteredQuestions() {
+  const statusFilter = document.getElementById('filter-status')?.value || ''
+  const domainFilter = document.getElementById('filter-domain')?.value || ''
+  const tierFilter = document.getElementById('filter-tier')?.value || ''
+
+  let filtered = allQuestions
+  if (statusFilter) filtered = filtered.filter(q => q.status === statusFilter)
+  if (domainFilter) filtered = filtered.filter(q => q.domain === domainFilter)
+  if (tierFilter) filtered = filtered.filter(q => q.tier === parseInt(tierFilter))
+
+  const tbody = document.getElementById('questions-tbody')
+  if (!tbody) return
+
+  tbody.innerHTML = filtered.map(q => {
+    const correctRate = computeCorrectRate(q.id)
+    return `
+      <tr>
+        <td>${q.qid || '-'}</td>
+        <td>${q.domain}</td>
+        <td>${q.tier}</td>
+        <td>${q.axis || '-'}</td>
+        <td>${(q.question_text || '').substring(0, 40)}...</td>
+        <td style="text-align:right;">${correctRate}</td>
+        <td><span class="badge ${q.status === 'draft' ? 'badge--info' : 'badge--success'}">${q.status === 'draft' ? '초안' : '발행'}</span></td>
+        <td style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn btn-sm" style="padding:4px 8px; font-size:11px;" onclick="editQuestion('${q.id}')">수정</button>
+          <button class="btn btn-sm" style="padding:4px 8px; font-size:11px;" onclick="toggleStatus('${q.id}', '${q.status}')">전환</button>
+          <button class="btn btn-sm btn-danger" style="padding:4px 8px; font-size:11px;" onclick="deleteQuestion('${q.id}')">삭제</button>
+        </td>
+      </tr>
+    `
+  }).join('')
+}
+
+function computeCorrectRate(questionId) {
+  let correct = 0, total = 0
+  allAttempts.forEach(att => {
+    if (att.answers && att.answers[questionId]) {
+      const ans = att.answers[questionId]
+      if (ans.selected === ans.correct) correct++
+      total++
+    }
+  })
+  if (total === 0) return '—'
+  return Math.round((correct / total) * 100) + '%'
+}
+
+function renderTop5Chart() {
+  const stats = {}
+  allAttempts.forEach(att => {
+    if (att.answers) {
+      Object.entries(att.answers).forEach(([qId, ans]) => {
+        if (ans.selected !== ans.correct) {
+          if (!stats[qId]) stats[qId] = {correct: 0, wrong: 0}
+          stats[qId].wrong++
+        } else {
+          if (!stats[qId]) stats[qId] = {correct: 0, wrong: 0}
+          stats[qId].correct++
+        }
+      })
+    }
+  })
+
+  const top5 = Object.entries(stats)
+    .map(([qId, s]) => ({
+      qId,
+      q: allQuestions.find(x => x.id === qId),
+      wrongCount: s.wrong,
+      total: s.correct + s.wrong,
+      wrongRate: ((s.wrong / (s.correct + s.wrong)) * 100).toFixed(1)
+    }))
+    .filter(x => x.q)
+    .sort((a, b) => b.wrongCount - a.wrongCount)
+    .slice(0, 5)
+
+  return `
+    <div class="chart-card" style="margin-top:20px;">
+      <div class="chart-card__title">오답률 TOP 5</div>
+      ${top5.length ? `
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          ${top5.map((x, i) => `
+            <div>
+              <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px;">
+                <div style="width:24px; font-weight:700; color:var(--text-secondary);">${i+1}</div>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-size:var(--fs-sm); word-break:break-word;">${(x.q.question_text || '').substring(0, 50)}...</div>
+                </div>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px; margin-left:36px;">
+                <div style="flex:1; height:6px; background:var(--border-subtle); border-radius:3px; overflow:hidden;">
+                  <div style="height:100%; background:var(--danger); width:${x.wrongRate}%;"></div>
+                </div>
+                <div style="font-size:var(--fs-xs); color:var(--text-muted); white-space:nowrap;">${x.wrongRate}% (${x.wrongCount}/${x.total})</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      ` : `<div style="color:var(--text-muted); padding:20px; text-align:center;">응시 데이터가 없습니다.</div>`}
+    </div>
+  `
+}
+
+function openCreateQuestionModal() {
+  document.getElementById('form-id').value = ''
+  document.getElementById('question-form').reset()
+  document.getElementById('modal-title').textContent = '새 문항'
+  updateFormForType()
+  document.getElementById('question-modal').showModal()
+}
+
+function closeQuestionModal() {
+  document.getElementById('question-modal').close()
+}
+
+function updateFormForType() {
+  const type = document.getElementById('form-type').value
+  const optionsSection = document.getElementById('options-section')
+  if (type === 'multiple_choice') {
+    optionsSection.style.display = 'block'
+  } else {
+    optionsSection.style.display = 'none'
+  }
+}
+
+async function editQuestion(id) {
+  const q = allQuestions.find(x => x.id === id)
+  if (!q) return
+
+  document.getElementById('form-id').value = q.id
+  document.getElementById('form-qid').value = q.qid || ''
+  document.getElementById('form-domain').value = q.domain
+  document.getElementById('form-tier').value = q.tier
+  document.getElementById('form-axis').value = q.axis || ''
+  document.getElementById('form-type').value = q.type
+  document.getElementById('form-question').value = q.question_text
+  document.getElementById('form-status').value = q.status
+  document.getElementById('form-source-note').value = q.source_note || ''
+
+  if (q.type === 'multiple_choice') {
+    if (q.options) {
+      document.querySelectorAll('[data-option-index]').forEach((inp, i) => {
+        inp.value = (q.options && q.options[i]) || ''
+      })
+    }
+    if (q.option_tags) {
+      document.querySelectorAll('[data-tag-index]').forEach((sel, i) => {
+        sel.value = (q.option_tags && q.option_tags[i]) || ''
+      })
+    }
+    if (q.correct_index !== null && q.correct_index !== undefined) {
+      document.getElementById('form-correct-index').value = q.correct_index
+    }
+  }
+
+  document.getElementById('modal-title').textContent = '문항 수정'
+  updateFormForType()
+  document.getElementById('question-modal').showModal()
+}
+
+async function handleSaveQuestion(e) {
+  e.preventDefault()
+
+  const id = document.getElementById('form-id').value
+  const qid = document.getElementById('form-qid').value.trim()
+  const domain = document.getElementById('form-domain').value
+  const tier = parseInt(document.getElementById('form-tier').value)
+  const axis = document.getElementById('form-axis').value ? parseInt(document.getElementById('form-axis').value) : null
+  const type = document.getElementById('form-type').value
+  const question_text = document.getElementById('form-question').value.trim()
+  const status = document.getElementById('form-status').value
+  const source_note = document.getElementById('form-source-note').value.trim()
+
+  if (!domain || !tier || !type || !question_text) {
+    alert('필수 필드를 모두 입력해주세요.')
+    return
+  }
+
+  let options = null, correct_index = null, option_tags = null
+  if (type === 'multiple_choice') {
+    options = Array.from(document.querySelectorAll('[data-option-index]')).map(inp => inp.value.trim()).filter(v => v)
+    option_tags = Array.from(document.querySelectorAll('[data-tag-index]')).map(sel => sel.value).slice(0, options.length)
+    correct_index = parseInt(document.getElementById('form-correct-index').value)
+
+    if (options.length < 2) {
+      alert('객관식은 최소 2개 이상의 보기가 필요합니다.')
+      return
+    }
+    if (isNaN(correct_index) || correct_index < 0 || correct_index >= options.length) {
+      alert('정답을 올바르게 선택해주세요.')
+      return
+    }
+  }
+
+  const payload = {qid, tier, axis, domain, type, question_text, status, source_note, options, correct_index, option_tags}
+
+  let result
+  if (id) {
+    result = await AUTH.sb.from('questions').update(payload).eq('id', id)
+    if (!result.error) {
+      await AUTH.sb.from('admin_audit_log').insert([{
+        actor_email: (await AUTH.sb.auth.getSession()).data.session.user.email,
+        action: 'question.update',
+        detail: `문항 ID: ${qid || id}`
+      }])
+    }
+  } else {
+    result = await AUTH.sb.from('questions').insert([payload])
+    if (!result.error) {
+      await AUTH.sb.from('admin_audit_log').insert([{
+        actor_email: (await AUTH.sb.auth.getSession()).data.session.user.email,
+        action: 'question.create',
+        detail: `문항 ID: ${qid}`
+      }])
+    }
+  }
+
+  if (!result.error) {
+    closeQuestionModal()
+    await loadQuestions()
+    renderQuestionsPage()
+  } else {
+    alert('저장 실패: ' + result.error.message)
+  }
+}
+
+async function toggleStatus(id, currentStatus) {
+  const newStatus = currentStatus === 'draft' ? 'published' : 'draft'
+  const q = allQuestions.find(x => x.id === id)
+  const {error} = await AUTH.sb.from('questions').update({status: newStatus}).eq('id', id)
+  if (!error) {
+    await AUTH.sb.from('admin_audit_log').insert([{
+      actor_email: (await AUTH.sb.auth.getSession()).data.session.user.email,
+      action: `question.${newStatus === 'published' ? 'publish' : 'draft'}`,
+      detail: `문항 ID: ${q?.qid || id}`
+    }])
+    await loadQuestions()
+    renderQuestionsPage()
+  } else {
+    alert('상태 변경 실패: ' + error.message)
+  }
+}
+
+async function deleteQuestion(id) {
+  if (!confirm('이 문항을 삭제하시겠습니까?')) return
+  const q = allQuestions.find(x => x.id === id)
+  const {error} = await AUTH.sb.from('questions').delete().eq('id', id)
+  if (!error) {
+    await AUTH.sb.from('admin_audit_log').insert([{
+      actor_email: (await AUTH.sb.auth.getSession()).data.session.user.email,
+      action: 'question.delete',
+      detail: `문항 ID: ${q?.qid || id}`
+    }])
+    await loadQuestions()
+    renderQuestionsPage()
+  } else {
+    alert('삭제 실패: ' + error.message)
+  }
+}
+
+const BULK_IMPORT_HEADER = ['qid', '영역', 'Tier', '역량축', '문항내용', '보기1', '보기2', '보기3', '보기4', '정답번호', '보기1태그', '보기2태그', '보기3태그', '보기4태그']
+const VALID_DOMAINS = ['기본 IT 용어', 'POS 자동연동', '티오더 AI', '계약·재계약·분쟁']
+const VALID_TAGS = ['', '정답', '구버전 정책', '타 팀 용어', '유사 기능 혼동', '완전 무관']
+let bulkImportRows = []
+
+function openBulkImportModal() {
+  document.getElementById('bulk-import-textarea').value = ''
+  document.getElementById('bulk-import-preview').innerHTML = ''
+  document.getElementById('bulk-import-submit-btn').disabled = true
+  bulkImportRows = []
+  document.getElementById('bulk-import-modal').showModal()
+}
+
+function closeBulkImportModal() {
+  document.getElementById('bulk-import-modal').close()
+}
+
+function copyBulkTemplateHeader() {
+  navigator.clipboard.writeText(BULK_IMPORT_HEADER.join('\t')).then(() => {
+    alert('헤더 행을 클립보드에 복사했습니다. 구글시트 첫 행에 붙여넣으세요.')
+  }).catch(() => {
+    alert('복사에 실패했습니다. 아래 텍스트를 직접 복사하세요:\n\n' + BULK_IMPORT_HEADER.join('\t'))
+  })
+}
+
+function parseBulkImportRow(cells, rowNum) {
+  const errors = []
+  const [qid, domain, tierRaw, axisRaw, question_text, opt1, opt2, opt3, opt4, correctRaw, tag1, tag2, tag3, tag4] = cells
+
+  if (!domain || !VALID_DOMAINS.includes(domain.trim())) {
+    errors.push(`영역이 올바르지 않습니다 (${VALID_DOMAINS.join(' / ')} 중 하나)`)
+  }
+  const tier = parseInt(tierRaw)
+  if (isNaN(tier) || tier < 0 || tier > 2) errors.push('Tier는 0/1/2 중 하나여야 합니다')
+
+  let axis = null
+  if (axisRaw && axisRaw.trim()) {
+    axis = parseInt(axisRaw)
+    if (isNaN(axis) || axis < 1 || axis > 5) errors.push('역량축은 1~5 중 하나이거나 비워둬야 합니다')
+  }
+
+  if (!question_text || !question_text.trim()) errors.push('문항내용이 비어있습니다')
+
+  const options = [opt1, opt2, opt3, opt4].map(v => (v || '').trim()).filter(v => v)
+  if (options.length < 2) errors.push('보기가 최소 2개 필요합니다')
+
+  const correctNum = parseInt(correctRaw)
+  let correct_index = null
+  if (isNaN(correctNum) || correctNum < 1 || correctNum > options.length) {
+    errors.push(`정답번호는 1~${options.length || 4} 범위여야 합니다`)
+  } else {
+    correct_index = correctNum - 1
+  }
+
+  const tagsRaw = [tag1, tag2, tag3, tag4].map(v => (v || '').trim())
+  tagsRaw.forEach((t, i) => {
+    if (i < options.length && t && !VALID_TAGS.includes(t)) {
+      errors.push(`보기${i + 1}태그 값이 올바르지 않습니다`)
+    }
+  })
+  const option_tags = options.map((_, i) => {
+    if (correct_index !== null && i === correct_index) return tagsRaw[i] || '정답'
+    return tagsRaw[i] || ''
+  })
+
+  return {
+    rowNum,
+    valid: errors.length === 0,
+    errors,
+    payload: {
+      qid: (qid || '').trim() || null,
+      tier: isNaN(tier) ? null : tier,
+      axis,
+      domain: domain ? domain.trim() : '',
+      type: 'multiple_choice',
+      question_text: question_text ? question_text.trim() : '',
+      options,
+      correct_index,
+      option_tags,
+      status: 'draft'
+    },
+    preview: { qid, domain, tier: tierRaw, question_text }
+  }
+}
+
+function previewBulkImport() {
+  const raw = document.getElementById('bulk-import-textarea').value
+  const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0)
+
+  if (lines.length === 0) {
+    document.getElementById('bulk-import-preview').innerHTML = '<div class="empty-state">붙여넣은 데이터가 없습니다.</div>'
+    document.getElementById('bulk-import-submit-btn').disabled = true
+    return
+  }
+
+  // 첫 줄은 헤더로 간주하고 무시
+  const dataLines = lines.slice(1)
+  bulkImportRows = dataLines.map((line, idx) => parseBulkImportRow(line.split('\t'), idx + 2))
+
+  const validCount = bulkImportRows.filter(r => r.valid).length
+  const invalidCount = bulkImportRows.length - validCount
+
+  const rowsHtml = bulkImportRows.map(r => `
+    <tr>
+      <td>${r.rowNum}</td>
+      <td>${escapeHtmlBulk(r.preview.qid || '-')}</td>
+      <td>${escapeHtmlBulk(r.preview.domain || '-')}</td>
+      <td>${escapeHtmlBulk((r.preview.question_text || '').substring(0, 30))}...</td>
+      <td>${r.valid ? '<span class="badge badge--success">정상</span>' : `<span class="badge badge--danger">오류</span>`}</td>
+      <td style="font-size:var(--fs-xs); color:var(--danger);">${r.errors.join(', ')}</td>
+    </tr>
+  `).join('')
+
+  document.getElementById('bulk-import-preview').innerHTML = `
+    <div style="margin-bottom:8px; font-size:var(--fs-sm);">
+      총 ${bulkImportRows.length}행 중 <strong style="color:var(--success);">${validCount}건 정상</strong>${invalidCount > 0 ? `, <strong style="color:var(--danger);">${invalidCount}건 오류</strong>` : ''}
+    </div>
+    <div class="table-wrap table-wrap--scroll">
+      <table class="data-table">
+        <thead><tr><th>행</th><th>qid</th><th>영역</th><th>문항내용</th><th>상태</th><th>오류 사유</th></tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  `
+
+  document.getElementById('bulk-import-submit-btn').disabled = validCount === 0
+  document.getElementById('bulk-import-submit-btn').textContent = `일괄 등록 (${validCount}건)`
+}
+
+async function submitBulkImport() {
+  const validRows = bulkImportRows.filter(r => r.valid)
+  if (validRows.length === 0) return
+  if (!confirm(`${validRows.length}건의 문항을 초안(draft) 상태로 등록합니다. 계속할까요?`)) return
+
+  const payloads = validRows.map(r => r.payload)
+  const { error } = await AUTH.sb.from('questions').insert(payloads)
+
+  if (error) {
+    alert('일괄 등록 실패: ' + error.message)
+    return
+  }
+
+  await AUTH.sb.from('admin_audit_log').insert([{
+    actor_email: (await AUTH.sb.auth.getSession()).data.session.user.email,
+    action: 'question.bulk_import',
+    detail: `시트 일괄 등록 ${validRows.length}건 (초안 상태)`
+  }])
+
+  alert(`${validRows.length}건의 문항이 초안 상태로 등록되었습니다.`)
+  closeBulkImportModal()
+  await loadQuestions()
+  renderQuestionsPage()
+}
+
+function escapeHtmlBulk(text) {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+init()
+</script>
+</body>
+</html>

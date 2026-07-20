@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>평가 만들기</title>
+  <link rel="stylesheet" href="/shared/admin-design.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="/shared/config.js"></script>
+  <script src="/shared/auth.js"></script>
+  <script src="/shared/nav.js"></script>
+  <style>
+    .wizard-container { max-width: 960px; margin: 0 auto; }
+    .step-section { display: none; }
+    .step-section.active { display: block; }
+    .tree-group__items { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+    .summary-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }
+    .summary-item:last-child { border-bottom: none; }
+    .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 24px; }
+    .form-field { display: flex; flex-direction: column; gap: 6px; }
+    .form-field.span-2 { grid-column: 1 / -1; }
+    .form-field label { font-size: var(--fs-sm); font-weight: 600; color: var(--text-secondary); }
+    .form-field .dt-range { display: flex; align-items: center; gap: 8px; }
+    .form-field textarea.input { min-height: 90px; resize: vertical; }
+    @media (max-width: 640px) { .form-grid-2 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <header class="topbar" id="topbar"></header>
+  <main class="main"><div class="content">
+    <div class="page-head"><div>
+      <h1 class="page-title">새 평가 만들기</h1>
+      <p class="page-desc">5단계 마법사를 통해 평가 회차를 설정합니다.</p>
+    </div></div>
+
+    <div class="wizard-container">
+      <!-- 진행 단계 표시 -->
+      <div class="stepper" style="margin-bottom: 32px;">
+        <div class="step is-active">
+          <span class="step-number">1</span>
+          <span>기본 정보</span>
+        </div>
+        <div class="step">
+          <span class="step-number">2</span>
+          <span>대상자 선택</span>
+        </div>
+        <div class="step">
+          <span class="step-number">3</span>
+          <span>문항 구성</span>
+        </div>
+        <div class="step">
+          <span class="step-number">4</span>
+          <span>평가 기준</span>
+        </div>
+        <div class="step">
+          <span class="step-number">5</span>
+          <span>최종 확인</span>
+        </div>
+      </div>
+
+      <!-- Step 0: 기본 정보 -->
+      <div class="step-section active">
+        <div class="panel">
+          <div class="panel-head"><h2>Step 1. 평가 기본 정보</h2></div>
+          <div class="panel-body">
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="field-label">평가명 <span class="req">*</span></label>
+                <input type="text" class="input" id="field-label" placeholder="예: 2026년 1회차 세일즈 역량평가" />
+              </div>
+              <div class="form-field">
+                <label for="field-owner">평가 담당자</label>
+                <input type="text" class="input" id="field-owner" placeholder="예: Sales Enablement팀 고예린" />
+              </div>
+              <div class="form-field">
+                <label for="field-opens-at">평가 기간 <span class="req">*</span></label>
+                <div class="dt-range">
+                  <input type="datetime-local" class="input" id="field-opens-at" />
+                  <span class="dt-sep">~</span>
+                  <input type="datetime-local" class="input" id="field-closes-at" />
+                </div>
+              </div>
+              <div class="form-field">
+                <label for="field-time-limit">제한 시간</label>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <input type="number" class="input" id="field-time-limit" min="0" placeholder="예: 35" style="max-width:140px;" />
+                  <span style="color:var(--text-muted); font-size:var(--fs-sm);">분</span>
+                </div>
+              </div>
+              <div class="form-field span-2">
+                <label for="field-purpose">평가 목적</label>
+                <textarea class="input" id="field-purpose" placeholder="예: 고객 응대 현장에서 제품과 기능을 정확히 설명할 수 있는지 확인합니다."></textarea>
+              </div>
+              <div class="form-field span-2">
+                <label for="field-description">평가 설명</label>
+                <textarea class="input" id="field-description" placeholder="예: 총 24문항이며 응시 기간 내 자유롭게 1회 응시합니다."></textarea>
+              </div>
+              <div class="form-field span-2">
+                <label class="radio-opt" style="width:fit-content;">
+                  <input type="checkbox" id="field-active" checked />
+                  이 평가를 지금 활성화합니다
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 1: 대상자 선택 -->
+      <div class="step-section">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Step 2. 응시 대상자 선택</h2>
+            <div style="font-size: var(--fs-sm); color: var(--text-tertiary);">선택된 인원: <strong id="selected-count">0</strong>명</div>
+          </div>
+          <div class="panel-body">
+            <div style="margin-bottom: 16px;">
+              <label style="font-size: var(--fs-sm); font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 8px;">클러스터 필터:</label>
+              <select class="input" id="cluster-filter" style="max-width: 240px;" onchange="filterByCluster()">
+                <option value="">전체</option>
+                <option value="A">A · 대고객 접점</option>
+                <option value="B">B · 제품개발·공급</option>
+                <option value="C">C · 경영지원</option>
+              </select>
+            </div>
+            <div id="team-groups-container"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: 문항 구성 -->
+      <div class="step-section">
+        <div class="panel">
+          <div class="panel-head"><h2>Step 3. 문항 구성 확인</h2></div>
+          <div class="panel-body">
+            <div class="notice-callout" style="margin-bottom: 16px;">
+              <svg class="ic"><circle cx="9" cy="9" r="8" fill="none"/><path d="M9 5v5M9 12v1"/></svg>
+              <div>회차별로 다른 문항 세트를 배정하는 기능은 지원하지 않습니다. 현재 발행된 모든 문항이 이 평가에 자동 포함됩니다. 문항을 추가하려면 <a href="/admin/questions.html" style="color: var(--accent); text-decoration: underline;">문항 관리</a>에서 발행 상태로 변경하세요.</div>
+            </div>
+            <div id="question-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px;"></div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>문항 ID</th>
+                    <th style="width: 120px;">카테고리</th>
+                    <th style="width: 80px;">난이도</th>
+                    <th style="width: 80px;">역량축</th>
+                  </tr>
+                </thead>
+                <tbody id="questions-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: 평가 기준 -->
+      <div class="step-section">
+        <div class="panel">
+          <div class="panel-head"><h2>Step 4. 평가 기준</h2></div>
+          <div class="panel-body">
+            <div class="notice-callout" style="margin-bottom: 16px;">
+              <svg class="ic"><circle cx="9" cy="9" r="8" fill="none"/><path d="M9 5v5M9 12v1"/></svg>
+              <div>현재 실제 채점 로직(<code style="background:rgba(0,0,0,0.1); padding:2px 6px; border-radius:3px;">exam.html</code>)은 합격선 75%/Tier0 과락선 90%가 코드에 고정되어 있어, 여기서 값을 바꿔도 실제 채점 결과에는 반영되지 않습니다. 이 값들은 정책을 기록·공유하는 용도입니다.</div>
+            </div>
+            <div id="policy-display" class="field-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4: 최종 확인 -->
+      <div class="step-section">
+        <div class="panel">
+          <div class="panel-head"><h2>Step 5. 최종 확인 및 생성</h2></div>
+          <div class="panel-body">
+            <div style="margin-bottom: 20px;">
+              <div class="summary-item">
+                <span style="font-weight: 600;">평가명</span>
+                <span id="summary-label">-</span>
+              </div>
+              <div class="summary-item">
+                <span style="font-weight: 600;">평가 담당자</span>
+                <span id="summary-owner">-</span>
+              </div>
+              <div class="summary-item">
+                <span style="font-weight: 600;">응시 기간</span>
+                <span id="summary-period">-</span>
+              </div>
+              <div class="summary-item">
+                <span style="font-weight: 600;">제한 시간</span>
+                <span id="summary-time-limit">-</span>
+              </div>
+              <div class="summary-item">
+                <span style="font-weight: 600;">대상자 수</span>
+                <span id="summary-targets">-</span>
+              </div>
+              <div class="summary-item">
+                <span style="font-weight: 600;">문항 수</span>
+                <span id="summary-questions">-</span>
+              </div>
+              <div class="summary-item">
+                <span style="font-weight: 600;">활성 상태</span>
+                <span id="summary-active">-</span>
+              </div>
+            </div>
+            <div class="notice-callout" style="background: var(--accent-subtle); border-color: var(--accent);">
+              <svg class="ic" style="color: var(--accent);"><circle cx="9" cy="9" r="8" fill="none"/><path d="M9 5v5M9 12v1"/></svg>
+              <div style="color: var(--accent);">위 정보로 평가 회차를 생성합니다. 대상자는 생성 후 추가 배정이 가능합니다.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 하단 버튼 바 -->
+      <div class="footer-bar">
+        <button class="btn btn-outline" id="btn-prev" onclick="prevStep()" style="display: none;">이전</button>
+        <button class="btn btn-primary" id="btn-next" onclick="nextStep()">다음</button>
+        <button class="btn btn-primary" id="btn-create" onclick="createRound()" style="display: none;">평가 생성</button>
+      </div>
+    </div>
+  </div></main>
+</div>
+
+<script>
+let authInfo = null;
+let currentStep = 0;
+let employees = [];
+let selectedEmails = new Set();
+let publishedQuestions = [];
+let policySettings = {};
+let allTeams = {};
+let clusterFilter = '';
+
+function validateSyncWeights() {
+  const term = parseInt(document.getElementById('sync_weight_term')?.value || 0);
+  const oldPolicy = parseInt(document.getElementById('sync_weight_old_policy')?.value || 0);
+  const misuse = parseInt(document.getElementById('sync_weight_misuse')?.value || 0);
+  const confusion = parseInt(document.getElementById('sync_weight_confusion')?.value || 0);
+
+  const total = term + oldPolicy + misuse + confusion;
+  const statusEl = document.getElementById('sync-weight-status');
+
+  if (!statusEl) return; // DOM이 아직 렌더링되지 않음
+
+  if (total === 100) {
+    statusEl.textContent = '현재 합계 100% · 저장가능';
+    statusEl.style.background = 'var(--success-subtle)';
+    statusEl.style.borderColor = 'var(--success)';
+    statusEl.style.color = 'var(--success)';
+  } else {
+    statusEl.textContent = `현재 합계 ${total}% · 오류 (100%이어야 합니다)`;
+    statusEl.style.background = 'var(--danger-subtle)';
+    statusEl.style.borderColor = 'var(--danger)';
+    statusEl.style.color = 'var(--danger)';
+  }
+}
+
+async function init() {
+  authInfo = await AUTH.requirePage({ admin: true });
+  if (!authInfo) return;
+
+  renderAdminShell({
+    role: authInfo.role,
+    current: '/admin/round-create.html',
+    email: authInfo.email,
+    rounds: [],
+    sidebarMount: 'sidebar',
+    topbarMount: 'topbar'
+  });
+
+  await loadData();
+  showStep(0);
+}
+
+async function loadData() {
+  try {
+    // 응시 가능 직원 로드 (eligible=true)
+    const { data: emp } = await AUTH.sb.from('employees').select('name,email,team,cluster').eq('eligible', true).order('team,name');
+    employees = emp || [];
+
+    // 팀별 그룹화
+    allTeams = {};
+    employees.forEach(e => {
+      if (!allTeams[e.team]) {
+        allTeams[e.team] = [];
+      }
+      allTeams[e.team].push(e);
+    });
+
+    // 발행된 문항
+    const { data: qs } = await AUTH.sb.from('questions').select('id,qid,domain,tier,axis,status').eq('status', 'published');
+    publishedQuestions = qs || [];
+
+    // 평가 정책
+    const { data: settings } = await AUTH.sb.from('app_settings').select('key,value');
+    (settings || []).forEach(s => {
+      policySettings[s.key] = s.value;
+    });
+
+    renderTeamGroups();
+    renderQuestionStats();
+    renderPolicyDisplay();
+  } catch (err) {
+    console.error('Load data error:', err);
+  }
+}
+
+function renderTeamGroups() {
+  let teams = Object.keys(allTeams).sort();
+
+  // 클러스터 필터 적용
+  if (clusterFilter) {
+    const filtered = {};
+    teams.forEach(team => {
+      const teamEmps = allTeams[team].filter(e => e.cluster === clusterFilter);
+      if (teamEmps.length > 0) {
+        filtered[team] = teamEmps;
+      }
+    });
+    teams = Object.keys(filtered).sort();
+  }
+
+  const container = document.getElementById('team-groups-container');
+  const html = teams.map(team => {
+    const teamEmps = clusterFilter ? allTeams[team].filter(e => e.cluster === clusterFilter) : allTeams[team];
+    const teamChecked = teamEmps.every(e => selectedEmails.has(e.email));
+    const teamIndeterminate = teamEmps.some(e => selectedEmails.has(e.email)) && !teamChecked;
+
+    return `
+      <div class="tree-group">
+        <div class="tree-group__header">
+          <input type="checkbox" ${teamChecked ? 'checked' : ''} ${teamIndeterminate ? 'indeterminate' : ''} onchange="toggleTeam('${team}', this.checked, ${clusterFilter ? `'${clusterFilter}'` : 'null'})">
+          <span style="font-weight: 700;">${escapeHtml(team)}</span>
+          <span style="color: var(--text-muted); font-size: var(--fs-xs); margin-left: auto;">${teamEmps.length}명</span>
+        </div>
+        <div class="tree-group__items">
+          ${teamEmps.map(e => `
+            <label class="tree-item">
+              <input type="checkbox" ${selectedEmails.has(e.email) ? 'checked' : ''} onchange="toggleEmail('${e.email}')">
+              <span>${escapeHtml(e.name)}</span>
+            </label>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = html;
+  updateSelectedCount();
+}
+
+function filterByCluster() {
+  clusterFilter = document.getElementById('cluster-filter').value;
+  renderTeamGroups();
+}
+
+function toggleTeam(team, checked, cluster) {
+  const teamEmps = cluster ? allTeams[team].filter(e => e.cluster === cluster) : allTeams[team];
+  teamEmps.forEach(e => {
+    if (checked) {
+      selectedEmails.add(e.email);
+    } else {
+      selectedEmails.delete(e.email);
+    }
+  });
+  renderTeamGroups();
+}
+
+function toggleEmail(email) {
+  if (selectedEmails.has(email)) {
+    selectedEmails.delete(email);
+  } else {
+    selectedEmails.add(email);
+  }
+  updateSelectedCount();
+}
+
+function updateSelectedCount() {
+  document.getElementById('selected-count').textContent = selectedEmails.size;
+}
+
+function renderQuestionStats() {
+  const tierCounts = {};
+  const domainCounts = {};
+  publishedQuestions.forEach(q => {
+    tierCounts[q.tier] = (tierCounts[q.tier] || 0) + 1;
+    domainCounts[q.domain] = (domainCounts[q.domain] || 0) + 1;
+  });
+
+  const statsHtml = `
+    <div class="pill-matrix-item">
+      <span class="metric-label">전체 문항</span>
+      <strong>${publishedQuestions.length}</strong>
+      <div class="metric-note">문항</div>
+    </div>
+    ${Object.entries(tierCounts).sort().map(([tier, count]) => `
+      <div class="pill-matrix-item">
+        <span class="metric-label">난이도 ${tier}</span>
+        <strong>${count}</strong>
+        <div class="metric-note">문항</div>
+      </div>
+    `).join('')}
+  `;
+  document.getElementById('question-stats').innerHTML = `<div class="pill-matrix">${statsHtml}</div>`;
+
+  const qHtml = publishedQuestions.map(q => `
+    <tr>
+      <td>${escapeHtml(q.qid || '-')}</td>
+      <td>${escapeHtml(q.domain)}</td>
+      <td>${q.tier}</td>
+      <td>${q.axis || '-'}</td>
+    </tr>
+  `).join('');
+  document.getElementById('questions-table-body').innerHTML = qHtml || '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">발행된 문항이 없습니다.</td></tr>';
+}
+
+function renderPolicyDisplay() {
+  const defaults = {
+    policy_pass_score: 75,
+    policy_tier0_score: 90,
+    policy_retake_limit: 1,
+    policy_risk_wrong_rate: 40,
+    policy_result_disclosure: 'immediate',
+    sync_weight_term: 25,
+    sync_weight_old_policy: 25,
+    sync_weight_misuse: 25,
+    sync_weight_confusion: 25
+  };
+
+  const display = document.getElementById('policy-display');
+  const html = `
+    <div class="field-row">
+      <div class="field-label">합격 기준 점수 <span class="req">*</span></div>
+      <div class="field-value">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="number" id="policy_pass_score" class="input" min="0" max="100" style="width: 120px;" value="${policySettings.policy_pass_score?.value ?? defaults.policy_pass_score}" />
+          <span style="color: var(--text-muted); font-size: var(--fs-sm);">%</span>
+        </div>
+        <div class="inline-note">응시자가 이 점수 이상을 받아야 평가 통과로 간주됩니다.</div>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">Tier0 과락 기준 <span class="req">*</span></div>
+      <div class="field-value">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="number" id="policy_tier0_score" class="input" min="0" max="100" style="width: 120px;" value="${policySettings.policy_tier0_score?.value ?? defaults.policy_tier0_score}" />
+          <span style="color: var(--text-muted); font-size: var(--fs-sm);">%</span>
+        </div>
+        <div class="inline-note">필수영역(Tier0) 문항 점수가 이 미만이면 전체 합격 여부와 무관하게 과락 처리됩니다.</div>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">재응시 허용 횟수 <span class="req">*</span></div>
+      <div class="field-value">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="number" id="policy_retake_limit" class="input" min="0" max="10" style="width: 120px;" value="${policySettings.policy_retake_limit?.value ?? defaults.policy_retake_limit}" />
+          <span style="color: var(--text-muted); font-size: var(--fs-sm);">회</span>
+        </div>
+        <div class="inline-note">같은 평가 회차 내에서 불합격한 응시자가 재응시할 수 있는 최대 횟수입니다.</div>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">위험군 판단 오답률 <span class="req">*</span></div>
+      <div class="field-value">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="number" id="policy_risk_wrong_rate" class="input" min="0" max="100" style="width: 120px;" value="${policySettings.policy_risk_wrong_rate?.value ?? defaults.policy_risk_wrong_rate}" />
+          <span style="color: var(--text-muted); font-size: var(--fs-sm);">% 이상</span>
+        </div>
+        <div class="inline-note">싱크 미스 분석에서 이 오답률 이상을 "위험군" 또는 "싱크 위험" 범주로 표시합니다.</div>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">결과 공개 시점 <span class="req">*</span></div>
+      <div class="field-value">
+        <select id="policy_result_disclosure" class="input">
+          <option value="immediate" ${(policySettings.policy_result_disclosure?.value ?? defaults.policy_result_disclosure) === 'immediate' ? 'selected' : ''}>즉시 공개</option>
+          <option value="after_all_complete" ${(policySettings.policy_result_disclosure?.value ?? defaults.policy_result_disclosure) === 'after_all_complete' ? 'selected' : ''}>모든 응시자 응시 완료 후</option>
+          <option value="admin_approval" ${(policySettings.policy_result_disclosure?.value ?? defaults.policy_result_disclosure) === 'admin_approval' ? 'selected' : ''}>관리자 승인 후</option>
+        </select>
+        <div class="inline-note">평가 응시자에게 자신의 채점 결과를 언제부터 공개할지 결정합니다.</div>
+      </div>
+    </div>
+    <div style="border-top: 1px solid var(--border-subtle); padding-top: 16px; margin-top: 16px;">
+      <div style="font-weight: 600; font-size: var(--fs-base); color: var(--text-primary); margin-bottom: 12px;">싱크 점수 가중치 입력</div>
+      <div class="inline-note" style="margin-bottom: 16px;">다음 4가지 오답 원인별 가중치를 입력하세요. 합계는 100%이어야 합니다.</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px;">
+        <div class="field-row" style="padding: 0; margin: 0; border: none;">
+          <div class="field-label">기준·용어 혼동</div>
+          <div class="field-value" style="flex-direction: row; gap: 8px;">
+            <input type="number" id="sync_weight_term" class="input" min="0" max="100" style="width: 80px;" value="${policySettings.sync_weight_term?.value ?? defaults.sync_weight_term}" oninput="validateSyncWeights()" />
+            <span style="color: var(--text-muted); font-size: var(--fs-sm);">%</span>
+          </div>
+        </div>
+        <div class="field-row" style="padding: 0; margin: 0; border: none;">
+          <div class="field-label">구버전 정책 미숙지</div>
+          <div class="field-value" style="flex-direction: row; gap: 8px;">
+            <input type="number" id="sync_weight_old_policy" class="input" min="0" max="100" style="width: 80px;" value="${policySettings.sync_weight_old_policy?.value ?? defaults.sync_weight_old_policy}" oninput="validateSyncWeights()" />
+            <span style="color: var(--text-muted); font-size: var(--fs-sm);">%</span>
+          </div>
+        </div>
+        <div class="field-row" style="padding: 0; margin: 0; border: none;">
+          <div class="field-label">용어 오용</div>
+          <div class="field-value" style="flex-direction: row; gap: 8px;">
+            <input type="number" id="sync_weight_misuse" class="input" min="0" max="100" style="width: 80px;" value="${policySettings.sync_weight_misuse?.value ?? defaults.sync_weight_misuse}" oninput="validateSyncWeights()" />
+            <span style="color: var(--text-muted); font-size: var(--fs-sm);">%</span>
+          </div>
+        </div>
+        <div class="field-row" style="padding: 0; margin: 0; border: none;">
+          <div class="field-label">유사기능 혼동</div>
+          <div class="field-value" style="flex-direction: row; gap: 8px;">
+            <input type="number" id="sync_weight_confusion" class="input" min="0" max="100" style="width: 80px;" value="${policySettings.sync_weight_confusion?.value ?? defaults.sync_weight_confusion}" oninput="validateSyncWeights()" />
+            <span style="color: var(--text-muted); font-size: var(--fs-sm);">%</span>
+          </div>
+        </div>
+      </div>
+      <div id="sync-weight-status" style="padding: 8px 10px; background: var(--surface-sunken); border: 1px dashed var(--border-moderate); border-radius: var(--radius-sm); font-size: var(--fs-xs); color: var(--text-tertiary);">현재 합계 100% · 저장가능</div>
+    </div>
+  `;
+  display.innerHTML = html;
+  validateSyncWeights(); // 초기 상태 검증
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function showStep(step) {
+  document.querySelectorAll('.step-section').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.step').forEach(el => {
+    el.classList.remove('is-active');
+  });
+
+  document.querySelectorAll('.step-section')[step].classList.add('active');
+  document.querySelectorAll('.step')[step].classList.add('is-active');
+
+  const btnPrev = document.getElementById('btn-prev');
+  const btnNext = document.getElementById('btn-next');
+  const btnCreate = document.getElementById('btn-create');
+
+  btnPrev.style.display = step > 0 ? 'block' : 'none';
+  btnNext.style.display = step < 4 ? 'block' : 'none';
+  btnCreate.style.display = step === 4 ? 'block' : 'none';
+
+  updateSummary();
+}
+
+function prevStep() {
+  if (currentStep > 0) {
+    currentStep--;
+    showStep(currentStep);
+  }
+}
+
+function nextStep() {
+  // 검증
+  if (currentStep === 0) {
+    const label = document.getElementById('field-label').value.trim();
+    const opensAt = document.getElementById('field-opens-at').value;
+    const closesAt = document.getElementById('field-closes-at').value;
+    if (!label || !opensAt || !closesAt) {
+      alert('필수 항목을 모두 입력하세요.');
+      return;
+    }
+  }
+
+  // Step 3 (평가기준)에서 Step 4로 이동할 때 싱크 가중치 합계 검증
+  if (currentStep === 3) {
+    const term = parseInt(document.getElementById('sync_weight_term').value || 0);
+    const oldPolicy = parseInt(document.getElementById('sync_weight_old_policy').value || 0);
+    const misuse = parseInt(document.getElementById('sync_weight_misuse').value || 0);
+    const confusion = parseInt(document.getElementById('sync_weight_confusion').value || 0);
+    const total = term + oldPolicy + misuse + confusion;
+
+    if (total !== 100) {
+      alert(`싱크 점수 가중치 합계가 100%이 아닙니다. (현재: ${total}%)`);
+      return;
+    }
+  }
+
+  if (currentStep < 4) {
+    currentStep++;
+    showStep(currentStep);
+  }
+}
+
+function updateSummary() {
+  const label = document.getElementById('field-label').value || '-';
+  const owner = document.getElementById('field-owner').value || '-';
+  const opensAt = document.getElementById('field-opens-at').value || '-';
+  const closesAt = document.getElementById('field-closes-at').value || '-';
+  const timeLimit = document.getElementById('field-time-limit').value;
+  const active = document.getElementById('field-active').checked;
+
+  const fmtDt = (dt) => {
+    if (dt === '-') return '-';
+    const d = new Date(dt);
+    return d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  };
+
+  document.getElementById('summary-label').textContent = label;
+  document.getElementById('summary-owner').textContent = owner;
+  document.getElementById('summary-period').textContent = fmtDt(opensAt) + ' ~ ' + fmtDt(closesAt);
+  document.getElementById('summary-time-limit').textContent = timeLimit ? timeLimit + '분 (기록용, 실제 응시 화면에 타이머로 적용되지는 않습니다)' : '-';
+  document.getElementById('summary-targets').textContent = selectedEmails.size + '명';
+  document.getElementById('summary-questions').textContent = publishedQuestions.length + '개';
+  document.getElementById('summary-active').textContent = active ? '활성' : '비활성';
+}
+
+async function createRound() {
+  try {
+    const label = document.getElementById('field-label').value.trim();
+    const owner = document.getElementById('field-owner').value.trim();
+    const opensAt = document.getElementById('field-opens-at').value;
+    const closesAt = document.getElementById('field-closes-at').value;
+    const timeLimit = document.getElementById('field-time-limit').value;
+    const purpose = document.getElementById('field-purpose').value.trim();
+    const description = document.getElementById('field-description').value.trim();
+    const active = document.getElementById('field-active').checked;
+
+    if (!label || !opensAt || !closesAt) {
+      alert('필수 항목을 모두 입력하세요.');
+      return;
+    }
+
+    if (selectedEmails.size === 0) {
+      alert('최소 1명 이상의 대상자를 선택하세요.');
+      return;
+    }
+
+    // 평가 회차 생성
+    const { data: newRound, error: roundError } = await AUTH.sb.from('exam_rounds').insert({
+      label,
+      owner: owner || null,
+      opens_at: opensAt,
+      closes_at: closesAt,
+      time_limit_minutes: timeLimit ? parseInt(timeLimit) : null,
+      purpose: purpose || null,
+      description: description || null,
+      active
+    }).select().single();
+
+    if (roundError) throw roundError;
+
+    // 대상자 배정
+    const targetInserts = Array.from(selectedEmails).map(email => ({
+      round_id: newRound.id,
+      email,
+      assigned_at: new Date().toISOString()
+    }));
+
+    const { error: targetError } = await AUTH.sb.from('exam_round_targets').insert(targetInserts);
+    if (targetError) throw targetError;
+
+    // 정책값 저장 (app_settings upsert)
+    const policyUpdates = [
+      { key: 'policy_pass_score', value: parseInt(document.getElementById('policy_pass_score').value) },
+      { key: 'policy_tier0_score', value: parseInt(document.getElementById('policy_tier0_score').value) },
+      { key: 'policy_retake_limit', value: parseInt(document.getElementById('policy_retake_limit').value) },
+      { key: 'policy_risk_wrong_rate', value: parseInt(document.getElementById('policy_risk_wrong_rate').value) },
+      { key: 'policy_result_disclosure', value: document.getElementById('policy_result_disclosure').value },
+      { key: 'sync_weight_term', value: parseInt(document.getElementById('sync_weight_term').value) },
+      { key: 'sync_weight_old_policy', value: parseInt(document.getElementById('sync_weight_old_policy').value) },
+      { key: 'sync_weight_misuse', value: parseInt(document.getElementById('sync_weight_misuse').value) },
+      { key: 'sync_weight_confusion', value: parseInt(document.getElementById('sync_weight_confusion').value) }
+    ];
+
+    for (const item of policyUpdates) {
+      const { error: policyError } = await AUTH.sb.from('app_settings').upsert({
+        key: item.key,
+        value: item.value,
+        updated_by: authInfo.email,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+
+      if (policyError) throw policyError;
+    }
+
+    // audit_log 기록 - 평가 생성
+    await AUTH.sb.from('admin_audit_log').insert({
+      actor_email: authInfo.email,
+      action: 'round.create',
+      detail: `"${label}" 평가 생성, 대상자 ${selectedEmails.size}명 배정`
+    });
+
+    // audit_log 기록 - 정책 업데이트
+    const policyDetail = policyUpdates.map(u => `${u.key}=${u.value}`).join(', ');
+    await AUTH.sb.from('admin_audit_log').insert({
+      actor_email: authInfo.email,
+      action: 'policy.update',
+      detail: `평가 "${label}" 생성 시 정책값 변경: ${policyDetail}`
+    });
+
+    alert('평가가 생성되었습니다!');
+    location.href = '/admin/rounds.html';
+  } catch (err) {
+    console.error('Create round error:', err);
+    alert('평가 생성 중 오류 발생: ' + err.message);
+  }
+}
+
+init();
+</script>
+</body>
+</html>
